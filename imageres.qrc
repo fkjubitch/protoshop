@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/sideBarIcons">
+        <file>images/line.png</file>
+        <file>images/pen.png</file>
+        <file>images/circle.png</file>
+        <file>images/curve.png</file>
+        <file>images/ellipse.png</file>
+        <file>images/polygon.png</file>
+        <file>images/rect.png</file>
+        <file>images/select.png</file>
+    </qresource>
+</RCC>
