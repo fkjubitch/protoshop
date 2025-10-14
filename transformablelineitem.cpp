@@ -133,7 +133,7 @@ void TransformableLineItem::receiveSceneMousePosition(
             QLineF curr(m_centerPoint, scenePos);
             qreal angleDelta = curr.angleTo(start);
             setTransformOriginPoint(lineCenter());
-            setRotation(m_initialRotation + angleDelta);
+            setRotation(m_initialRotation - angleDelta);
         }
     }
 }

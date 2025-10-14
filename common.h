@@ -3,6 +3,9 @@
 
 #include <QPointF>
 #include <QColor>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QGraphicsItem>
 
 enum PainterStatus {SELECT, PEN, LINE, CURVE, RECT, POLYGON, CIRCLE, ELLIPSE};
 enum MouseLeftClickStatus {PRESS, MOVE, RELEASE};
@@ -33,5 +36,8 @@ public:
     int penWidth = 1; // 线宽
     Qt::PenStyle penStyle = Qt::SolidLine; // 画笔类型
 };
+
+QJsonObject itemToJson(QGraphicsItem *item);
+void jsonToItem(const QJsonObject &obj, QGraphicsScene *scene);
 
 #endif // COMMON_H

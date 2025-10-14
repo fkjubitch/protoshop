@@ -25,8 +25,6 @@ private slots:
 
     void on_lineButton_clicked();
 
-    void on_curveButton_clicked();
-
     void on_rectButton_clicked();
 
     void on_polygonButton_clicked();
@@ -41,9 +39,18 @@ private slots:
 
     void on_spinBox_valueChanged(int arg1);
 
+    void on_solidButton_toggled(bool checked);
+
+    void on_dashButton_toggled(bool checked);
+
+    void on_dotButton_toggled(bool checked);
+
+    void on_dashDotButton_toggled(bool checked);
+
 private:
     QButtonGroup* sideBarButtonGroup = nullptr;
     QButtonGroup* colorTypeButtonGroup = nullptr; // 着色类型按钮组
+    QButtonGroup* lineTypeButtonGroup = nullptr; // 线框样式按钮组
     QGraphicsScene* m_scene = nullptr;
 
 public:

@@ -20,6 +20,9 @@ qt_add_executable(Protoshop
     transformablerectitem.h transformablerectitem.cpp
     transformablelineitem.h transformablelineitem.cpp
     transformableellipseitem.h transformableellipseitem.cpp
+    transformablepolygonitem.h transformablepolygonitem.cpp
+    transformablepathitem.h transformablepathitem.cpp
+    transformablecurveitem.h transformablecurveitem.cpp
 
 
 )

@@ -32,6 +32,20 @@ void CustomView::mousePressEvent(QMouseEvent *event)
     // 如果是鼠标左键按下，开始绘图
     switch (painterStatus)
     {
+        case PainterStatus::PEN:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_startPoint = event->pos();
+                m_isDrawing = true;
+                m_livePath = QPainterPath();
+                m_livePath.moveTo(m_startPoint);
+
+                m_currentPathItem = new TransformablePathItem(m_livePath);
+                m_currentPathItem->setPen(QPen(penColor, penWidth, penStyle));
+                scene()->addItem(m_currentPathItem);
+            }
+            break;
+        }
         case PainterStatus::LINE:
         {
             if (event->button() == Qt::LeftButton) {
@@ -66,6 +80,24 @@ void CustomView::mousePressEvent(QMouseEvent *event)
             } else {
                 // 如果是其他按键，则调用基类的处理方式（例如右键菜单、中键拖拽视图）
                 QGraphicsView::mousePressEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::POLYGON:
+        {
+            if (event->button() == Qt::LeftButton) {
+                QPointF scenePos = mapToScene(event->pos());
+                m_livePolygon << scenePos;
+                m_isDrawing = true;
+
+                if (!m_currentPolygonItem) {   // 第一次点击：新建
+                    m_currentPolygonItem = new TransformablePolygonItem(m_livePolygon);
+                    m_currentPolygonItem->setPen(QPen(penColor, penWidth, penStyle));
+                    m_currentPolygonItem->setBrush(QBrush(brushColor));
+                    scene()->addItem(m_currentPolygonItem);
+                } else {                       // 后续点击：追加顶点
+                    m_currentPolygonItem->setPolygon(m_livePolygon);
+                }
             }
             break;
         }
@@ -126,10 +158,20 @@ void CustomView::mouseMoveEvent(QMouseEvent *event)
 
     switch (painterStatus)
     {
+        case PainterStatus::PEN:
+        {
+            if (m_isDrawing) {
+                QPointF currentPoint = event->pos();
+                m_livePath.lineTo(currentPoint);
+                m_currentPathItem->setPath(m_livePath);
+            } else {
+                QGraphicsView::mouseMoveEvent(event);
+            }
+            break;
+        }
         case PainterStatus::LINE:
         {
             if (m_isDrawing) {
-                // 更新直线尺寸
                 QPointF currentPoint = event->pos();
                 QLineF line(m_startPoint, currentPoint);
                 m_currentLineItem->setLine(line);
@@ -141,10 +183,21 @@ void CustomView::mouseMoveEvent(QMouseEvent *event)
         case PainterStatus::RECT:
         {
             if (m_isDrawing) {
-                // 如果正在绘制，就更新矩形的尺寸
                 QPointF currentPoint = event->pos();
                 QRectF rect(m_startPoint, currentPoint);
                 m_currentRectItem->setRect(rect.normalized()); // normalized()保证左上角坐标小于右下角
+            } else {
+                QGraphicsView::mouseMoveEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::POLYGON:
+        {
+            if (m_isDrawing) {
+                m_currentPolygonItem->setPolygon(m_livePolygon);
+                QPolygonF poly = m_currentPolygonItem->polygon();    // 简单示意：让所有共点跟随鼠标
+                poly << event->pos();
+                m_currentPolygonItem->setPolygon(poly);
             } else {
                 QGraphicsView::mouseMoveEvent(event);
             }
@@ -210,6 +263,18 @@ void CustomView::mouseReleaseEvent(QMouseEvent *event)
 
     switch (painterStatus)
     {
+        case PainterStatus::PEN:
+        {
+            if (event->button() == Qt::LeftButton && m_isDrawing) {
+                m_isDrawing = false;
+                if (m_currentPathItem && m_currentPathItem->path().isEmpty()) {
+                    scene()->removeItem(m_currentPathItem);
+                    delete m_currentPathItem;
+                }
+                m_currentPathItem = nullptr;
+            }
+            break;
+        }
         case PainterStatus::LINE:
         {
             if (event->button() == Qt::LeftButton && m_isDrawing) {
@@ -236,6 +301,22 @@ void CustomView::mouseReleaseEvent(QMouseEvent *event)
                 }
                 m_currentRectItem = nullptr;
 
+            } else {
+                QGraphicsView::mouseReleaseEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::POLYGON:
+        {
+            if (event->button() == Qt::RightButton && m_isDrawing) {
+                m_isDrawing = false;
+                if (m_currentPolygonItem &&
+                    m_currentPolygonItem->polygon().boundingRect().isEmpty()) {
+                    scene()->removeItem(m_currentPolygonItem);
+                    delete m_currentPolygonItem;
+                }
+                m_livePolygon.clear();
+                m_currentPolygonItem = nullptr;
             } else {
                 QGraphicsView::mouseReleaseEvent(event);
             }

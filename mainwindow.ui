@@ -43,7 +43,7 @@
       <rect>
        <x>9</x>
        <y>12</y>
-       <width>58</width>
+       <width>60</width>
        <height>681</height>
       </rect>
      </property>
@@ -153,44 +153,6 @@
         <property name="icon">
          <iconset resource="imageres.qrc">
           <normaloff>:/sideBarIcons/images/line.png</normaloff>:/sideBarIcons/images/line.png</iconset>
-        </property>
-        <property name="iconSize">
-         <size>
-          <width>40</width>
-          <height>40</height>
-         </size>
-        </property>
-        <property name="checkable">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="curveButton">
-        <property name="minimumSize">
-         <size>
-          <width>50</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>50</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="toolTip">
-         <string>曲线</string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true"/>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-        <property name="icon">
-         <iconset resource="imageres.qrc">
-          <normaloff>:/sideBarIcons/images/curve.png</normaloff>:/sideBarIcons/images/curve.png</iconset>
         </property>
         <property name="iconSize">
          <size>
@@ -369,31 +331,196 @@
        </spacer>
       </item>
       <item>
-       <layout class="QVBoxLayout" name="verticalLayout_3">
+       <layout class="QVBoxLayout" name="verticalLayout_4">
+        <property name="spacing">
+         <number>0</number>
+        </property>
         <item>
-         <layout class="QVBoxLayout" name="verticalLayout_2">
+         <widget class="QLabel" name="label_2">
+          <property name="minimumSize">
+           <size>
+            <width>50</width>
+            <height>30</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>50</width>
+            <height>30</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>颜色</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignmentFlag::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout">
           <property name="spacing">
            <number>0</number>
           </property>
-          <property name="sizeConstraint">
-           <enum>QLayout::SizeConstraint::SetMinimumSize</enum>
+          <item>
+           <widget class="QPushButton" name="boardButton">
+            <property name="minimumSize">
+             <size>
+              <width>25</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>25</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>边框着色选择</string>
+            </property>
+            <property name="styleSheet">
+             <string notr="true"/>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="imageres.qrc">
+              <normaloff>:/sideBarIcons/images/board.png</normaloff>:/sideBarIcons/images/board.png</iconset>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="fillButton">
+            <property name="minimumSize">
+             <size>
+              <width>25</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>25</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>填充着色选择</string>
+            </property>
+            <property name="styleSheet">
+             <string notr="true"/>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset resource="imageres.qrc">
+              <normaloff>:/sideBarIcons/images/fill.png</normaloff>:/sideBarIcons/images/fill.png</iconset>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+            <property name="checkable">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QPushButton" name="palatteButton">
+          <property name="minimumSize">
+           <size>
+            <width>50</width>
+            <height>50</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>50</width>
+            <height>50</height>
+           </size>
+          </property>
+          <property name="toolTip">
+           <string>选择颜色</string>
+          </property>
+          <property name="styleSheet">
+           <string notr="true"/>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+          <property name="icon">
+           <iconset resource="imageres.qrc">
+            <normaloff>:/sideBarIcons/images/palette.png</normaloff>:/sideBarIcons/images/palette.png</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>40</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_5">
+          <property name="spacing">
+           <number>0</number>
           </property>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout">
+           <widget class="QLabel" name="label_3">
+            <property name="minimumSize">
+             <size>
+              <width>50</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>50</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>样式</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignmentFlag::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QGridLayout" name="gridLayout">
             <property name="spacing">
              <number>0</number>
             </property>
-            <item>
-             <widget class="QPushButton" name="boardButton">
+            <item row="1" column="0">
+             <widget class="QPushButton" name="solidButton">
               <property name="minimumSize">
                <size>
-                <width>25</width>
+                <width>50</width>
                 <height>25</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
-                <width>25</width>
+                <width>50</width>
                 <height>25</height>
                </size>
               </property>
@@ -408,12 +535,12 @@
               </property>
               <property name="icon">
                <iconset resource="imageres.qrc">
-                <normaloff>:/sideBarIcons/images/board.png</normaloff>:/sideBarIcons/images/board.png</iconset>
+                <normaloff>:/sideBarIcons/images/solid.png</normaloff>:/sideBarIcons/images/solid.png</iconset>
               </property>
               <property name="iconSize">
                <size>
-                <width>20</width>
-                <height>20</height>
+                <width>45</width>
+                <height>45</height>
                </size>
               </property>
               <property name="checkable">
@@ -421,22 +548,22 @@
               </property>
              </widget>
             </item>
-            <item>
-             <widget class="QPushButton" name="fillButton">
+            <item row="3" column="0">
+             <widget class="QPushButton" name="dotButton">
               <property name="minimumSize">
                <size>
-                <width>25</width>
+                <width>50</width>
                 <height>25</height>
                </size>
               </property>
               <property name="maximumSize">
                <size>
-                <width>25</width>
+                <width>50</width>
                 <height>25</height>
                </size>
               </property>
               <property name="toolTip">
-               <string>填充着色选择</string>
+               <string>边框着色选择</string>
               </property>
               <property name="styleSheet">
                <string notr="true"/>
@@ -446,12 +573,88 @@
               </property>
               <property name="icon">
                <iconset resource="imageres.qrc">
-                <normaloff>:/sideBarIcons/images/fill.png</normaloff>:/sideBarIcons/images/fill.png</iconset>
+                <normaloff>:/sideBarIcons/images/dot.png</normaloff>:/sideBarIcons/images/dot.png</iconset>
               </property>
               <property name="iconSize">
                <size>
-                <width>20</width>
-                <height>20</height>
+                <width>65</width>
+                <height>65</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QPushButton" name="dashButton">
+              <property name="minimumSize">
+               <size>
+                <width>50</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>50</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>边框着色选择</string>
+              </property>
+              <property name="styleSheet">
+               <string notr="true"/>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="icon">
+               <iconset resource="imageres.qrc">
+                <normaloff>:/sideBarIcons/images/dash.png</normaloff>:/sideBarIcons/images/dash.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>45</width>
+                <height>45</height>
+               </size>
+              </property>
+              <property name="checkable">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="4" column="0">
+             <widget class="QPushButton" name="dashDotButton">
+              <property name="minimumSize">
+               <size>
+                <width>50</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>50</width>
+                <height>25</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>边框着色选择</string>
+              </property>
+              <property name="styleSheet">
+               <string notr="true"/>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="icon">
+               <iconset resource="imageres.qrc">
+                <normaloff>:/sideBarIcons/images/dashdot.png</normaloff>:/sideBarIcons/images/dashdot.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>55</width>
+                <height>55</height>
                </size>
               </property>
               <property name="checkable">
@@ -461,44 +664,20 @@
             </item>
            </layout>
           </item>
-          <item>
-           <widget class="QPushButton" name="palatteButton">
-            <property name="minimumSize">
-             <size>
-              <width>50</width>
-              <height>50</height>
-             </size>
-            </property>
-            <property name="maximumSize">
-             <size>
-              <width>50</width>
-              <height>50</height>
-             </size>
-            </property>
-            <property name="toolTip">
-             <string>选择颜色</string>
-            </property>
-            <property name="styleSheet">
-             <string notr="true"/>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-            <property name="icon">
-             <iconset resource="imageres.qrc">
-              <normaloff>:/sideBarIcons/images/palette.png</normaloff>:/sideBarIcons/images/palette.png</iconset>
-            </property>
-            <property name="iconSize">
-             <size>
-              <width>40</width>
-              <height>40</height>
-             </size>
-            </property>
-            <property name="checkable">
-             <bool>false</bool>
-            </property>
-           </widget>
-          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <property name="spacing">
+           <number>0</number>
+          </property>
+          <property name="sizeConstraint">
+           <enum>QLayout::SizeConstraint::SetMinimumSize</enum>
+          </property>
           <item>
            <widget class="QLabel" name="label">
             <property name="minimumSize">
@@ -519,7 +698,7 @@
              </font>
             </property>
             <property name="text">
-             <string>线宽:</string>
+             <string>线宽</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignmentFlag::AlignCenter</set>
@@ -591,7 +770,7 @@
     </property>
     <addaction name="action1_2"/>
     <addaction name="action2"/>
-    <addaction name="action1_3"/>
+    <addaction name="exitAction"/>
    </widget>
    <widget class="QMenu" name="menu_2">
     <property name="title">
@@ -605,7 +784,13 @@
     <property name="title">
      <string>绘图</string>
     </property>
-    <addaction name="action_3"/>
+    <addaction name="rectSelectAction"/>
+    <addaction name="penAction"/>
+    <addaction name="lineAction"/>
+    <addaction name="rectAction"/>
+    <addaction name="polygonAction"/>
+    <addaction name="circleAction"/>
+    <addaction name="ellipseAction"/>
    </widget>
    <widget class="QMenu" name="menu_4">
     <property name="title">
@@ -620,10 +805,16 @@
      <string>关于</string>
     </property>
    </widget>
+   <widget class="QMenu" name="menu_6">
+    <property name="title">
+     <string>帮助</string>
+    </property>
+   </widget>
    <addaction name="menu"/>
    <addaction name="menu_2"/>
    <addaction name="menu_3"/>
    <addaction name="menu_4"/>
+   <addaction name="menu_6"/>
    <addaction name="menu_5"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -643,9 +834,9 @@
     <string>填充颜色</string>
    </property>
   </action>
-  <action name="action_3">
+  <action name="rectSelectAction">
    <property name="text">
-    <string/>
+    <string>方框选择</string>
    </property>
   </action>
   <action name="action_4">
@@ -670,10 +861,10 @@
   </action>
   <action name="action2">
    <property name="text">
-    <string>保存</string>
+    <string>保存为</string>
    </property>
   </action>
-  <action name="action1_3">
+  <action name="exitAction">
    <property name="text">
     <string>退出</string>
    </property>
@@ -681,6 +872,36 @@
   <action name="delete_action">
    <property name="text">
     <string>删除选定图形</string>
+   </property>
+  </action>
+  <action name="penAction">
+   <property name="text">
+    <string>任意画笔</string>
+   </property>
+  </action>
+  <action name="lineAction">
+   <property name="text">
+    <string>线段</string>
+   </property>
+  </action>
+  <action name="rectAction">
+   <property name="text">
+    <string>矩形</string>
+   </property>
+  </action>
+  <action name="polygonAction">
+   <property name="text">
+    <string>多边形</string>
+   </property>
+  </action>
+  <action name="circleAction">
+   <property name="text">
+    <string>圆</string>
+   </property>
+  </action>
+  <action name="ellipseAction">
+   <property name="text">
+    <string>椭圆</string>
    </property>
   </action>
  </widget>

@@ -11,7 +11,6 @@ MainWindow::MainWindow(QWidget *parent)
     sideBarButtonGroup->addButton(ui->selectButton, 0);
     sideBarButtonGroup->addButton(ui->penButton, 1);
     sideBarButtonGroup->addButton(ui->lineButton, 2);
-    sideBarButtonGroup->addButton(ui->curveButton, 3);
     sideBarButtonGroup->addButton(ui->rectButton, 4);
     sideBarButtonGroup->addButton(ui->polygonButton, 5);
     sideBarButtonGroup->addButton(ui->circleButton, 6);
@@ -24,6 +23,14 @@ MainWindow::MainWindow(QWidget *parent)
     colorTypeButtonGroup->addButton(ui->fillButton, 1);
     colorTypeButtonGroup->setExclusive(true);
     ui->boardButton->setChecked(true);
+
+    lineTypeButtonGroup = new QButtonGroup();
+    lineTypeButtonGroup->addButton(ui->solidButton, 0);
+    lineTypeButtonGroup->addButton(ui->dashButton, 1);
+    lineTypeButtonGroup->addButton(ui->dotButton, 2);
+    lineTypeButtonGroup->addButton(ui->dashDotButton, 3);
+    lineTypeButtonGroup->setExclusive(true);
+    ui->solidButton->setChecked(true);
 
     // 创建场景
     m_scene = new QGraphicsScene(this);
@@ -57,15 +64,6 @@ void MainWindow::on_lineButton_clicked()
     if (ui->lineButton->isChecked())
     {
         ui->graphicsView->setPainterStatus(PainterStatus::LINE);
-    }
-}
-
-
-void MainWindow::on_curveButton_clicked()
-{
-    if (ui->curveButton->isChecked())
-    {
-        ui->graphicsView->setPainterStatus(PainterStatus::CURVE);
     }
 }
 
@@ -128,5 +126,29 @@ void MainWindow::receiveMousePos(QPointF pos)
 void MainWindow::on_spinBox_valueChanged(int arg1)
 {
     ui->graphicsView->penWidth = arg1;
+}
+
+
+void MainWindow::on_solidButton_toggled(bool checked)
+{
+    if(checked) ui->graphicsView->penStyle = Qt::SolidLine;
+}
+
+
+void MainWindow::on_dashButton_toggled(bool checked)
+{
+    if(checked) ui->graphicsView->penStyle = Qt::DashLine;
+}
+
+
+void MainWindow::on_dotButton_toggled(bool checked)
+{
+    if(checked) ui->graphicsView->penStyle = Qt::DotLine;
+}
+
+
+void MainWindow::on_dashDotButton_toggled(bool checked)
+{
+    if(checked) ui->graphicsView->penStyle = Qt::DashDotLine;
 }
 

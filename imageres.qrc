@@ -11,5 +11,9 @@
         <file>images/palette.png</file>
         <file>images/board.png</file>
         <file>images/fill.png</file>
+        <file>images/solid.png</file>
+        <file>images/dash.png</file>
+        <file>images/dot.png</file>
+        <file>images/dashdot.png</file>
     </qresource>
 </RCC>
