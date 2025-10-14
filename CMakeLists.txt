@@ -18,6 +18,8 @@ qt_add_executable(Protoshop
     imageres.qrc
     customview.h customview.cpp
     transformablerectitem.h transformablerectitem.cpp
+    transformablelineitem.h transformablelineitem.cpp
+    transformableellipseitem.h transformableellipseitem.cpp
 
 
 )

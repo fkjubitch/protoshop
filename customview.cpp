@@ -1,5 +1,7 @@
 #include "customview.h"
 #include <QDebug>
+#include <cmath>
+#include <QKeyEvent>
 
 CustomView::CustomView(QWidget *parent)
     : QGraphicsView(parent), m_currentRectItem(nullptr), m_isDrawing(false)
@@ -30,6 +32,24 @@ void CustomView::mousePressEvent(QMouseEvent *event)
     // 如果是鼠标左键按下，开始绘图
     switch (painterStatus)
     {
+        case PainterStatus::LINE:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_startPoint = event->pos();
+                m_isDrawing = true;
+
+                // 创建一个新的矩形项，但暂时是空的
+                m_currentLineItem = new TransformableLineItem(QLineF(m_startPoint, m_startPoint));
+                m_currentLineItem->setPen(QPen(penColor, penWidth, penStyle)); // 设置画笔
+
+                // 将新项添加到场景中
+                scene()->addItem(m_currentLineItem);
+            } else {
+                // 如果是其他按键，则调用基类的处理方式（例如右键菜单、中键拖拽视图）
+                QGraphicsView::mousePressEvent(event);
+            }
+            break;
+        }
         case PainterStatus::RECT:
         {
             if (event->button() == Qt::LeftButton) {
@@ -38,13 +58,31 @@ void CustomView::mousePressEvent(QMouseEvent *event)
 
                 // 创建一个新的矩形项，但暂时是空的
                 m_currentRectItem = new TransformableRectItem(QRectF(m_startPoint, m_startPoint));
-                m_currentRectItem->setPen(QPen(Qt::black, 2)); // 设置画笔
-                // m_currentRectItem->setBrush(QBrush(Qt::cyan)); // 设置填充
+                m_currentRectItem->setPen(QPen(penColor, penWidth, penStyle)); // 设置画笔
+                m_currentRectItem->setBrush(QBrush(brushColor)); // 设置填充
 
                 // 将新项添加到场景中
                 scene()->addItem(m_currentRectItem);
             } else {
                 // 如果是其他按键，则调用基类的处理方式（例如右键菜单、中键拖拽视图）
+                QGraphicsView::mousePressEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::CIRCLE:
+        case PainterStatus::ELLIPSE:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_startPoint = event->pos();
+                m_isDrawing = true;
+                if (painterStatus == PainterStatus::CIRCLE)
+                    m_currentEllipseItem = new TransformableEllipseItem(QRectF(m_startPoint, m_startPoint), nullptr, true);
+                else
+                    m_currentEllipseItem = new TransformableEllipseItem(QRectF(m_startPoint, m_startPoint));
+                m_currentEllipseItem->setPen(QPen(penColor, penWidth, penStyle));
+                m_currentEllipseItem->setBrush(QBrush(brushColor));
+                scene()->addItem(m_currentEllipseItem);
+            } else {
                 QGraphicsView::mousePressEvent(event);
             }
             break;
@@ -88,6 +126,18 @@ void CustomView::mouseMoveEvent(QMouseEvent *event)
 
     switch (painterStatus)
     {
+        case PainterStatus::LINE:
+        {
+            if (m_isDrawing) {
+                // 更新直线尺寸
+                QPointF currentPoint = event->pos();
+                QLineF line(m_startPoint, currentPoint);
+                m_currentLineItem->setLine(line);
+            } else {
+                QGraphicsView::mouseMoveEvent(event);
+            }
+            break;
+        }
         case PainterStatus::RECT:
         {
             if (m_isDrawing) {
@@ -95,6 +145,37 @@ void CustomView::mouseMoveEvent(QMouseEvent *event)
                 QPointF currentPoint = event->pos();
                 QRectF rect(m_startPoint, currentPoint);
                 m_currentRectItem->setRect(rect.normalized()); // normalized()保证左上角坐标小于右下角
+            } else {
+                QGraphicsView::mouseMoveEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::CIRCLE: {
+            if (!m_isDrawing) {
+                QGraphicsView::mouseMoveEvent(event);
+                break;
+            }
+            QPointF currentPoint = event->pos();
+            QPointF delta = currentPoint - m_startPoint;
+
+            // 边长 = 最大移动距离，保证圆能跟随鼠标
+            qreal side = std::max(std::fabs(delta.x()), std::fabs(delta.y()));
+
+            // 让起点始终是正方形中心（或左上，按你需求改）
+            // qreal signX = std::copysign(1.0, delta.x());
+            // qreal signY = std::copysign(1.0, delta.y());
+            QPointF topLeft(m_startPoint.x() - (delta.x() < 0 ? side : 0),
+                            m_startPoint.y() - (delta.y() < 0 ? side : 0));
+            QRectF rect(topLeft, QSizeF(side, side));
+            m_currentEllipseItem->setRect(rect);
+            break;
+        }
+        case PainterStatus::ELLIPSE:
+        {
+            if (m_isDrawing) {
+                QPointF currentPoint = event->pos();
+                QRectF rect(m_startPoint, currentPoint);
+                m_currentEllipseItem->setRect(rect.normalized());
             } else {
                 QGraphicsView::mouseMoveEvent(event);
             }
@@ -129,6 +210,21 @@ void CustomView::mouseReleaseEvent(QMouseEvent *event)
 
     switch (painterStatus)
     {
+        case PainterStatus::LINE:
+        {
+            if (event->button() == Qt::LeftButton && m_isDrawing) {
+                m_isDrawing = false;
+                if (m_currentLineItem && m_currentLineItem->line().isNull()) {
+                    scene()->removeItem(m_currentLineItem);
+                    delete m_currentLineItem;
+                }
+                m_currentLineItem = nullptr;
+
+            } else {
+                QGraphicsView::mouseReleaseEvent(event);
+            }
+            break;
+        }
         case PainterStatus::RECT:
         {
             if (event->button() == Qt::LeftButton && m_isDrawing) {
@@ -145,10 +241,76 @@ void CustomView::mouseReleaseEvent(QMouseEvent *event)
             }
             break;
         }
+        case PainterStatus::CIRCLE:
+        case PainterStatus::ELLIPSE:
+        {
+            if (event->button() == Qt::LeftButton && m_isDrawing) {
+                m_isDrawing = false;
+                if (m_currentEllipseItem && m_currentEllipseItem->rect().isEmpty()) {
+                    scene()->removeItem(m_currentEllipseItem);
+                    delete m_currentEllipseItem;
+                }
+                m_currentEllipseItem = nullptr;
+            } else {
+                QGraphicsView::mouseReleaseEvent(event);
+            }
+            break;
+        }
         default:
         {
             setDragMode(QGraphicsView::RubberBandDrag);
             QGraphicsView::mouseReleaseEvent(event);
         }
     }
+}
+
+void CustomView::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Delete) {
+        deleteSelectedItem();
+    } else {
+        QGraphicsView::keyPressEvent(event); // 其他按键交给基类处理
+    }
+}
+
+void CustomView::deleteSelectedItem()
+{
+    // 获取所有选中的图元
+    QList<QGraphicsItem*> selectedItems = scene()->selectedItems();
+
+    // 删除选中的图元
+    for (QGraphicsItem *item : selectedItems) {
+        scene()->removeItem(item);
+        delete item;
+    }
+}
+
+void CustomView::palatteButtonClicked()
+{
+    QColor color = QColorDialog::getColor(Qt::black, nullptr, "选择颜色", QColorDialog::ShowAlphaChannel);
+    if(color.isValid()) {
+        switch(colorType){
+        case BOARD:{
+            penColor = color;
+            break;
+        }
+        case FILL:{
+            brushColor = color;
+            break;
+        }
+        }
+    }
+}
+
+void CustomView::boardButtonChecked(bool checked){
+    if(checked) colorType = BOARD;
+}
+
+void CustomView::fillButtonChecked(bool checked){
+    if(checked) colorType = FILL;
+}
+
+void CustomView::onDeleteActionClicked()
+{
+    deleteSelectedItem();
 }

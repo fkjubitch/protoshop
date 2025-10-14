@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QButtonGroup>
 #include <QGraphicsScene>
+#include <QColorDialog>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -38,9 +39,14 @@ private slots:
 
     void receiveMousePos(QPointF pos);
 
+    void on_spinBox_valueChanged(int arg1);
+
 private:
-    Ui::MainWindow *ui;
-    QButtonGroup* sideBarButtonGroup;
+    QButtonGroup* sideBarButtonGroup = nullptr;
+    QButtonGroup* colorTypeButtonGroup = nullptr; // 着色类型按钮组
     QGraphicsScene* m_scene = nullptr;
+
+public:
+    Ui::MainWindow *ui;
 };
 #endif // MAINWINDOW_H

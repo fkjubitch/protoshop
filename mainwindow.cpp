@@ -19,6 +19,12 @@ MainWindow::MainWindow(QWidget *parent)
     sideBarButtonGroup->setExclusive(true);
     ui->selectButton->setChecked(true); // 默认选择画笔
 
+    colorTypeButtonGroup = new QButtonGroup();
+    colorTypeButtonGroup->addButton(ui->boardButton, 0);
+    colorTypeButtonGroup->addButton(ui->fillButton, 1);
+    colorTypeButtonGroup->setExclusive(true);
+    ui->boardButton->setChecked(true);
+
     // 创建场景
     m_scene = new QGraphicsScene(this);
     m_scene->setSceneRect(ui->graphicsView->rect());
@@ -26,6 +32,10 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 连接信号与槽
     connect(ui->graphicsView, &CustomView::sendMousePos, this, &MainWindow::receiveMousePos);
+    connect(ui->palatteButton, &QPushButton::clicked, ui->graphicsView, &CustomView::palatteButtonClicked);
+    connect(ui->boardButton, &QPushButton::toggled, ui->graphicsView, &CustomView::boardButtonChecked);
+    connect(ui->fillButton, &QPushButton::toggled, ui->graphicsView, &CustomView::fillButtonChecked);
+    connect(ui->delete_action, &QAction::triggered, ui->graphicsView, &CustomView::onDeleteActionClicked);
 }
 
 MainWindow::~MainWindow()
@@ -40,7 +50,6 @@ void MainWindow::on_penButton_clicked()
         ui->graphicsView->setPainterStatus(PainterStatus::PEN);
     }
 }
-
 
 
 void MainWindow::on_lineButton_clicked()
@@ -113,5 +122,11 @@ void MainWindow::receiveMousePos(QPointF pos)
     cordInfo += " Y: ";
     cordInfo += QString::number(pos.y());
     ui->cord->setText(cordInfo);
+}
+
+
+void MainWindow::on_spinBox_valueChanged(int arg1)
+{
+    ui->graphicsView->penWidth = arg1;
 }
 

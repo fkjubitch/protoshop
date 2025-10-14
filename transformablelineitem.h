@@ -1,19 +1,17 @@
-#ifndef TRANSFORMABLERECTITEM_H
-#define TRANSFORMABLERECTITEM_H
+#ifndef TRANSFORMABLELINEITEM_H
+#define TRANSFORMABLELINEITEM_H
 
 #include "common.h"
-#include <QGraphicsScene>
-#include <QGraphicsRectItem>
+#include <QGraphicsLineItem>
 #include <QPainter>
 #include <QGraphicsSceneMouseEvent>
 #include <QCursor>
 #include <QPointF>
-#include <QMatrix4x4>
 
-class TransformableRectItem : public QGraphicsRectItem, public IMousePositionReceiver, public ItemCommon
+class TransformableLineItem : public QGraphicsLineItem, public IMousePositionReceiver, public ItemCommon
 {
 public:
-    explicit TransformableRectItem(const QRectF &rect, QGraphicsItem *parent = nullptr);
+    TransformableLineItem(const QLineF &line, QGraphicsItem *parent = nullptr);
 
     // 重写关键的虚函数
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) override;
@@ -31,24 +29,23 @@ private:
     // 枚举表示不同的控制点
     enum Handle {
         NoHandle,
-        TopLeft,
-        TopRight,
-        BottomLeft,
-        BottomRight,
+        Pole1Handle,
+        Pole2Handle,
         RotateHandle
     };
 
     // 用于跟踪当前正在操作的控制点
-    Handle m_currentHandle;
+    Handle m_currentHandle = NoHandle;
     // 用于在变换时保存鼠标按下的初始状态
     QPointF m_mouseDownPos;
-    QRectF m_mouseDownRect;
+    QLineF m_mouseDownLine;
     QPointF m_centerPoint;
-    qreal m_initialRotation;
+    qreal m_initialRotation = 0;
 
     // 辅助函数
     void setHandleCursor(Handle handle);
     Handle handleAt(const QPointF &pos);
+    QPointF lineCenter() const;
 };
 
-#endif // TRANSFORMABLERECTITEM_H
+#endif // TRANSFORMABLELINEITEM_H

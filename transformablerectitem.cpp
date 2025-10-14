@@ -1,6 +1,5 @@
 #include "transformablerectitem.h"
 #include <qmath.h> // for qAtan2, M_PI
-#include <QGraphicsScene>
 
 TransformableRectItem::TransformableRectItem(const QRectF &rect, QGraphicsItem *parent)
     : QGraphicsRectItem(rect, parent), m_currentHandle(NoHandle)
@@ -21,8 +20,8 @@ QRectF TransformableRectItem::boundingRect() const
 void TransformableRectItem::receiveSceneMousePosition(const QPointF &scenePos, const MouseLeftClickStatus mouseLeftClickStatus)
 {
     if (isSelected() || isRotateHandling){
-        QPointF itemPos = this->mapFromScene(scenePos);
         if (!this->isUnderMouse()) {
+            QPointF itemPos = this->mapFromScene(scenePos);
             Handle handle = handleAt(itemPos);
             setHandleCursor(handle);
 
@@ -65,10 +64,11 @@ void TransformableRectItem::paint(QPainter *painter, const QStyleOptionGraphicsI
     // 首先调用基类的paint方法绘制矩形本身
     QGraphicsRectItem::paint(painter, option, widget);
 
+    painter->setRenderHint(QPainter::Antialiasing);
+
     // 如果被选中，就绘制控制点
     if (isSelected()) {
-        painter->setRenderHint(QPainter::Antialiasing);
-        painter->setPen(QPen(Qt::black, 1));
+        painter->setPen(QPen(Qt::black, 1, Qt::SolidLine));
         painter->setBrush(Qt::white);
 
         // 缩放控制点 (四个角)
@@ -123,29 +123,22 @@ void TransformableRectItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
         QPointF pos = event->pos();
         prepareGeometryChange(); // 准备更新几何形状
 
+        QRectF newRect = m_mouseDownRect;
         switch (m_currentHandle) {
         case TopLeft: {
-            QRectF newRect = m_mouseDownRect;
             newRect.setTopLeft(pos);
-            setRect(newRect.normalized());
             break;
         }
         case TopRight: {
-            QRectF newRect = m_mouseDownRect;
             newRect.setTopRight(pos);
-            setRect(newRect.normalized());
             break;
         }
         case BottomLeft: {
-            QRectF newRect = m_mouseDownRect;
             newRect.setBottomLeft(pos);
-            setRect(newRect.normalized());
             break;
         }
         case BottomRight: {
-            QRectF newRect = m_mouseDownRect;
             newRect.setBottomRight(pos);
-            setRect(newRect.normalized());
             break;
         }
         case RotateHandle: {
@@ -153,6 +146,9 @@ void TransformableRectItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
         }
         default: break;
         }
+        newRect = newRect.normalized();
+        setRect(newRect);
+        setTransformOriginPoint(newRect.center());
     } else {
         QGraphicsRectItem::mouseMoveEvent(event);
     }
@@ -181,18 +177,6 @@ TransformableRectItem::Handle TransformableRectItem::handleAt(const QPointF &pos
 
     QPointF rotateHandlePos = topCenter + ROTATE_HANDLE_OFFSET * centerToTopVector;
     QRectF rotateHandle(rotateHandlePos - QPointF(HANDLE_SIZE/2, HANDLE_SIZE/2), QSizeF(HANDLE_SIZE, HANDLE_SIZE));
-
-    // QPointF topCenter = QPointF(rect().center().x(), rect().top());
-    // QPointF centerToTopVector = topCenter - rect().center();
-    // qreal centerToTopVectorNorm2 = QPointF::dotProduct(centerToTopVector, centerToTopVector);
-    // if(centerToTopVectorNorm2 > 0.0001){
-    //     centerToTopVector /= sqrt(QPointF::dotProduct(centerToTopVector, centerToTopVector));
-    // }
-    // QPointF rotateHandlePos = topCenter + ROTATE_HANDLE_OFFSET * centerToTopVector;
-    // painter->drawLine(topCenter, rotateHandlePos);
-    // painter->drawEllipse(rotateHandlePos, HANDLE_SIZE / 2, HANDLE_SIZE / 2);
-
-    // qDebug() << rotateHandle.topLeft() << ", " << rotateHandle.bottomRight()<< ", " << rotateHandle.contains(pos);
 
     if (topLeftHandle.contains(pos)) return TopLeft;
     if (topRightHandle.contains(pos)) return TopRight;

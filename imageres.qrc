@@ -8,5 +8,8 @@
         <file>images/polygon.png</file>
         <file>images/rect.png</file>
         <file>images/select.png</file>
+        <file>images/palette.png</file>
+        <file>images/board.png</file>
+        <file>images/fill.png</file>
     </qresource>
 </RCC>
