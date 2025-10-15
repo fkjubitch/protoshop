@@ -28,14 +28,14 @@ Windows 10及以上, QtCreator, Qt 6.9, MinGW 64, C++ 11及以上, CMake 3.31（
 
 ### 1. 直接下载.exe可执行文件
 
-在右边的 Release 下载打包好的可执行文件。
+在右边的 Releases 下载打包好的可执行文件。
 
 ### 2. 下载源码，本地编译
 
 下载源码
 
 ```bash
-git clone 
+git clone https://github.com/fkjubitch/protoshop.git
 ```
 
 在 QtCreator 中点击打开项目，选择 CMakeLists.txt 打开，为项目配置 Qt6 套件即可。
