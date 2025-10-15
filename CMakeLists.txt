@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 project(Protoshop LANGUAGES CXX)
 
 set(CMAKE_AUTORCC ON)
+set(app_icon_resource_windows "${CMAKE_CURRENT_SOURCE_DIR}/icon.rc")
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
@@ -22,9 +23,9 @@ qt_add_executable(Protoshop
     transformableellipseitem.h transformableellipseitem.cpp
     transformablepolygonitem.h transformablepolygonitem.cpp
     transformablepathitem.h transformablepathitem.cpp
-    transformablecurveitem.h transformablecurveitem.cpp
 
-
+    serialize.cpp
+    ${app_icon_resource_windows}
 )
 
 target_link_libraries(Protoshop

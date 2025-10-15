@@ -1,0 +1,302 @@
+[
+    {
+        "brushColor": "#ff000000",
+        "circle": true,
+        "h": 28,
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            -3,
+            -5
+        ],
+        "rot": 0,
+        "type": "TransformableEllipseItem",
+        "w": 28,
+        "x": 79,
+        "y": -164,
+        "z": 0
+    },
+    {
+        "brushColor": "#ffffffff",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "points": [
+            [
+                8,
+                -188
+            ],
+            [
+                -57,
+                -144
+            ],
+            [
+                68,
+                178
+            ],
+            [
+                121,
+                98
+            ],
+            [
+                114,
+                -102
+            ],
+            [
+                159,
+                -190
+            ]
+        ],
+        "pos": [
+            -1,
+            1
+        ],
+        "rot": 0,
+        "type": "TransformablePolygonItem",
+        "z": 0
+    },
+    {
+        "brushColor": "#ffff55ff",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "points": [
+            [
+                381,
+                504
+            ],
+            [
+                422,
+                475
+            ],
+            [
+                471,
+                513
+            ],
+            [
+                372,
+                562
+            ],
+            [
+                505,
+                560
+            ]
+        ],
+        "pos": [
+            -305,
+            -384
+        ],
+        "rot": 0,
+        "type": "TransformablePolygonItem",
+        "z": 0
+    },
+    {
+        "brushColor": "#ffaaaa7f",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "points": [
+            [
+                256,
+                532
+            ],
+            [
+                177.69173816085606,
+                519.6971025936249
+            ],
+            [
+                114,
+                555
+            ],
+            [
+                116,
+                555
+            ]
+        ],
+        "pos": [
+            -397.00000000000006,
+            -343.0000000000001
+        ],
+        "rot": -1450.323854806158,
+        "type": "TransformablePolygonItem",
+        "z": 0
+    },
+    {
+        "brushColor": "#ffffaaff",
+        "circle": true,
+        "h": 91,
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            -305,
+            -385
+        ],
+        "rot": 0,
+        "type": "TransformableEllipseItem",
+        "w": 91,
+        "x": 223,
+        "y": 154,
+        "z": 0
+    },
+    {
+        "brushColor": "#ff555500",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "points": [
+            [
+                249,
+                241
+            ],
+            [
+                198,
+                303
+            ],
+            [
+                198,
+                453
+            ],
+            [
+                280,
+                560
+            ],
+            [
+                374,
+                562
+            ],
+            [
+                372,
+                563
+            ]
+        ],
+        "pos": [
+            -304,
+            -384
+        ],
+        "rot": 0,
+        "type": "TransformablePolygonItem",
+        "z": 0
+    },
+    {
+        "brushColor": "#ffffffff",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            -305,
+            -384
+        ],
+        "rot": 0,
+        "type": "TransformableLineItem",
+        "x1": 401,
+        "x2": 469,
+        "y1": 376,
+        "y2": 375,
+        "z": 0
+    },
+    {
+        "brushColor": "#ffffffff",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            -305,
+            -384
+        ],
+        "rot": 0,
+        "type": "TransformableLineItem",
+        "x1": 420,
+        "x2": 424,
+        "y1": 282,
+        "y2": 476,
+        "z": 0
+    },
+    {
+        "brushColor": "#ffffffff",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            -306,
+            -392
+        ],
+        "rot": 0,
+        "type": "TransformableLineItem",
+        "x1": 369,
+        "x2": 484,
+        "y1": 175,
+        "y2": 262,
+        "z": 0
+    },
+    {
+        "brushColor": "#ffffffff",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            -318,
+            -393
+        ],
+        "rot": 0,
+        "type": "TransformableLineItem",
+        "x1": 394,
+        "x2": 509,
+        "y1": 165,
+        "y2": 241,
+        "z": 0
+    },
+    {
+        "brushColor": "#ffffffff",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            -305,
+            -384
+        ],
+        "rot": 0,
+        "type": "TransformableLineItem",
+        "x1": 465,
+        "x2": 421,
+        "y1": 193,
+        "y2": 283,
+        "z": 0
+    },
+    {
+        "brushColor": "#ffffffff",
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            -305,
+            -384
+        ],
+        "rot": 0,
+        "type": "TransformableLineItem",
+        "x1": 317,
+        "x2": 465,
+        "y1": 197,
+        "y2": 193,
+        "z": 0
+    },
+    {
+        "brushColor": "#ff000000",
+        "circle": true,
+        "h": 32,
+        "penColor": "#ff000000",
+        "penStyle": 1,
+        "penWidth": 1,
+        "pos": [
+            0,
+            0
+        ],
+        "rot": 0,
+        "type": "TransformableEllipseItem",
+        "w": 32,
+        "x": 60,
+        "y": -163,
+        "z": 0
+    }
+]

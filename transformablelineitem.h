@@ -17,6 +17,7 @@ public:
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget = nullptr) override;
     QRectF boundingRect() const override;
     void receiveSceneMousePosition(const QPointF &scenePos, const MouseLeftClickStatus mouseLeftClickStatus) override;
+    QPainterPath shape() const override;
 
 protected:
     // 重写鼠标事件以处理控制点

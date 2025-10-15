@@ -122,7 +122,6 @@ void TransformableEllipseItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 
 void TransformableEllipseItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
-    qDebug() << m_mouseDownRect;
     if (m_currentHandle == NoHandle) {
         QGraphicsEllipseItem::mouseMoveEvent(event);
         return;
@@ -152,6 +151,7 @@ void TransformableEllipseItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event
     Q_UNUSED(event)
     m_currentHandle = NoHandle;
     isRotateHandling = false;
+    QGraphicsEllipseItem::mouseReleaseEvent(event);
 }
 
 /* ===== 旋转核心 ===== */
@@ -169,9 +169,9 @@ void TransformableEllipseItem::receiveSceneMousePosition(const QPointF &scenePos
             if (status == MouseLeftClickStatus::PRESS
                 && h == RotateHandle && !isRotateHandling) {
                 m_currentHandle   = RotateHandle;
-                m_mouseDownPos    = mapToScene(itemPos);
+                m_mouseDownPos    = scenePos;
                 m_mouseDownRect   = rect();
-                m_centerPoint     = ellipseCenter();
+                m_centerPoint     = mapToScene(ellipseCenter());
                 m_initialRotation = rotation();
                 isRotateHandling  = true;
             }
@@ -182,11 +182,10 @@ void TransformableEllipseItem::receiveSceneMousePosition(const QPointF &scenePos
         }
 
         if (isRotateHandling) {
-            const QPointF cScene = mapToScene(m_centerPoint);
-            const QLineF start(cScene, m_mouseDownPos);
-            const QLineF curr(cScene, scenePos);
+            const QLineF start(m_centerPoint, m_mouseDownPos);
+            const QLineF curr(m_centerPoint, scenePos);
             const qreal angleDelta = start.angleTo(curr);
-            setTransformOriginPoint(m_centerPoint);
+            setTransformOriginPoint(ellipseCenter());
             setRotation(m_initialRotation - angleDelta);
         }
     }

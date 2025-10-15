@@ -19,7 +19,7 @@ QRectF TransformableRectItem::boundingRect() const
 
 void TransformableRectItem::receiveSceneMousePosition(const QPointF &scenePos, const MouseLeftClickStatus mouseLeftClickStatus)
 {
-    if (isSelected() || isRotateHandling){
+    if (isSelected() || isRotateHandling || isRotateHandle){
         if (!this->isUnderMouse()) {
             QPointF itemPos = this->mapFromScene(scenePos);
             Handle handle = handleAt(itemPos);
@@ -27,9 +27,9 @@ void TransformableRectItem::receiveSceneMousePosition(const QPointF &scenePos, c
 
             if (handle == Handle::RotateHandle && mouseLeftClickStatus == MouseLeftClickStatus::PRESS && !isRotateHandling) {
                 m_currentHandle = handle;
-                m_mouseDownPos = mapToScene(itemPos); // 一定要在按下的时候就转换, 不然会出现抖动
+                m_mouseDownPos = scenePos;
                 m_mouseDownRect = rect();
-                m_centerPoint = rect().center();
+                m_centerPoint = mapToScene(rect().center());
                 m_initialRotation = this->rotation();
                 isRotateHandling = true;
             }
@@ -39,19 +39,15 @@ void TransformableRectItem::receiveSceneMousePosition(const QPointF &scenePos, c
             isRotateHandling = false;
         }
         if (isRotateHandling) {
-            // 将中心点和当前点都转换到场景坐标系下
-            QPointF centerScenePos = mapToScene(m_centerPoint);
-            QPointF mouseDownScenePos = m_mouseDownPos;
-
             // 创建从中心点到鼠标按下点和当前点的两条线
-            QLineF startLine(centerScenePos, mouseDownScenePos);
-            QLineF currentLine(centerScenePos, scenePos);
+            QLineF startLine(m_centerPoint, m_mouseDownPos);
+            QLineF currentLine(m_centerPoint, scenePos);
 
             // 计算两条线之间的夹角（角度增量）
             qreal angleDelta = currentLine.angleTo(startLine);
 
             // 设置变换原点为矩形中心
-            setTransformOriginPoint(m_centerPoint);
+            setTransformOriginPoint(rect().center());
             // 在初始角度的基础上，应用角度增量
             // Qt中角度逆时针为正，angleTo也是逆时针为正，所以用减法
             setRotation(m_initialRotation + angleDelta);
@@ -81,7 +77,7 @@ void TransformableRectItem::paint(QPainter *painter, const QStyleOptionGraphicsI
         QPointF topCenter = QPointF(rect().center().x(), rect().top());
         QPointF centerToTopVector = topCenter - rect().center();
         qreal centerToTopVectorNorm2 = QPointF::dotProduct(centerToTopVector, centerToTopVector);
-        if(centerToTopVectorNorm2 > 0.0001){
+        if(centerToTopVectorNorm2 > PRECISION){
             centerToTopVector /= sqrt(QPointF::dotProduct(centerToTopVector, centerToTopVector));
         }
         QPointF rotateHandlePos = topCenter + ROTATE_HANDLE_OFFSET * centerToTopVector;
@@ -171,7 +167,7 @@ TransformableRectItem::Handle TransformableRectItem::handleAt(const QPointF &pos
     QPointF topCenter = QPointF(rect().center().x(), rect().top());
     QPointF centerToTopVector = topCenter - rect().center();
     qreal centerToTopVectorNorm2 = QPointF::dotProduct(centerToTopVector, centerToTopVector);
-    if(centerToTopVectorNorm2 > 0.0001){
+    if(centerToTopVectorNorm2 > PRECISION){
         centerToTopVector /= sqrt(QPointF::dotProduct(centerToTopVector, centerToTopVector));
     }
 

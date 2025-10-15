@@ -5,14 +5,15 @@
 #include <QMouseEvent>
 #include <QGraphicsRectItem>
 #include <QColorDialog>
+#include <QVector>
+#include <QStack>
+#include <QJsonArray>
 #include "common.h"
 #include "transformablepathitem.h"
 #include "transformablelineitem.h"
-#include "transformablecurveitem.h"
 #include "transformablerectitem.h"
 #include "transformablepolygonitem.h"
 #include "transformableellipseitem.h"
-#include "mainwindow.h"
 
 class CustomView : public QGraphicsView
 {
@@ -21,6 +22,9 @@ public:
     explicit CustomView(QWidget *parent = nullptr);
 
     void setPainterStatus(const PainterStatus ps);
+    //撤销重做相关
+    void saveSceneState();   // 保存当前场景状态
+    void restoreSceneState(const QJsonArray &state); // 恢复场景状态
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
@@ -38,7 +42,6 @@ private:
     TransformablePathItem *m_currentPathItem = nullptr;
     QPainterPath m_livePath;
     TransformableLineItem *m_currentLineItem = nullptr;
-    TransformableCurveItem *m_currentCurveItem = nullptr;
     TransformableRectItem *m_currentRectItem = nullptr; // 当前正在绘制的矩形
     TransformablePolygonItem *m_currentPolygonItem = nullptr;
     QPolygonF m_livePolygon;   // 正在采集的顶点
@@ -48,20 +51,30 @@ private:
     // 画笔相关
     QColor penColor = Qt::black;
     QColor brushColor = QColor(255,255,255,0); // 填充色
-    ColorType colorType = BOARD; // 着色类型
+
+    // 旋转相关
+    bool isRotateCursor = false;
+
+    // 撤销重做相关
+    const int maxUndoSteps = 50; // 最大撤销步数
+    QStack<QJsonArray> undoStack; // 重做栈
+    QStack<QJsonArray> redoStack; // 撤销栈
 
 public:
     int penWidth = 1; // 线宽
     Qt::PenStyle penStyle = Qt::SolidLine; // 画笔类型
+    ColorType colorType = BOARD; // 着色类型
 
 signals:
     void sendMousePos(QPointF pos);
 
 public slots:
     void palatteButtonClicked();
-    void boardButtonChecked(bool checked);
-    void fillButtonChecked(bool checked);
     void onDeleteActionClicked();
+    void onSaveAs();     // 弹出对话框 → 选 *.png / *.json
+    void onOpen();       // 弹出对话框 → 选 *.json → 还原
+    void onRevoke(); // 撤销
+    void onUndo();   // 重做
 };
 
 #endif // CUSTOMVIEW_H

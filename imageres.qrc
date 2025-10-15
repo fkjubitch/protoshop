@@ -15,5 +15,8 @@
         <file>images/dash.png</file>
         <file>images/dot.png</file>
         <file>images/dashdot.png</file>
+        <file>images/arat.jpg</file>
+        <file>images/fillButton.png</file>
+        <file>images/rat.ico</file>
     </qresource>
 </RCC>

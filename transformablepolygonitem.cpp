@@ -111,6 +111,7 @@ void TransformablePolygonItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event
     Q_UNUSED(event)
     m_currentHandle = NoHandle;
     isRotateHandling = false;
+    QGraphicsPolygonItem::mouseReleaseEvent(event);
 }
 
 /* ================= 旋转 ================= */
@@ -129,7 +130,7 @@ void TransformablePolygonItem::receiveSceneMousePosition(
             m_currentHandle    = RotateHandle;
             m_mouseDownScene   = scenePos;
             m_startPolygon     = polygon();
-            m_center           = polygon().boundingRect().center();
+            m_center           = mapToScene(polygon().boundingRect().center());
             m_initialRotation  = rotation();
             isRotateHandling   = true;
         }
@@ -140,11 +141,10 @@ void TransformablePolygonItem::receiveSceneMousePosition(
     }
 
     if (isRotateHandling) {
-        const QPointF cScene = mapToScene(m_center);
-        QLineF start(cScene, m_mouseDownScene);
-        QLineF curr(cScene, scenePos);
+        QLineF start(m_center, m_mouseDownScene);
+        QLineF curr(m_center, scenePos);
         qreal angleDelta = start.angleTo(curr);
-        setTransformOriginPoint(m_center);
+        setTransformOriginPoint(polygon().boundingRect().center());
         setRotation(m_initialRotation - angleDelta);
     }
 }

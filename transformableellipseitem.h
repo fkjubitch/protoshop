@@ -43,6 +43,7 @@ private:
     QLineF m_startLine;
     qreal m_initialRotation = 0.;
 
+public:
     bool isCircle;
 };
 #endif

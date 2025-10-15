@@ -39,12 +39,9 @@ void TransformableLineItem::paint(QPainter *painter,
                              QSize(HANDLE_SIZE, HANDLE_SIZE)));
 
     /* 旋转手柄 */
-    QPointF c = lineCenter();
     QPointF dir = p2 - p1;
-    if (!qFuzzyIsNull(dir.manhattanLength()))
-        dir = QPointF(-dir.y(), dir.x()) / dir.manhattanLength(); // 垂直单位向量
-    QPointF rotPos = c + dir * ROTATE_HANDLE_OFFSET;
-    painter->drawLine(c, rotPos);
+    dir = dir / sqrt(QPointF::dotProduct(dir, dir));
+    QPointF rotPos = p2 + dir * ROTATE_HANDLE_OFFSET;
     painter->drawEllipse(QRectF(rotPos - QPointF(HANDLE_SIZE/2, HANDLE_SIZE/2),
                                 QSize(HANDLE_SIZE, HANDLE_SIZE)));
 }
@@ -60,7 +57,6 @@ TransformableLineItem::handleAt(const QPointF &pos)
 {
     QPointF p1 = line().p1();
     QPointF p2 = line().p2();
-    QPointF c  = lineCenter();
 
     QRectF p1Rect(p1 - QPointF(HANDLE_SIZE/2, HANDLE_SIZE/2),
                   QSize(HANDLE_SIZE, HANDLE_SIZE));
@@ -68,9 +64,8 @@ TransformableLineItem::handleAt(const QPointF &pos)
                   QSize(HANDLE_SIZE, HANDLE_SIZE));
 
     QPointF dir = p2 - p1;
-    if (!qFuzzyIsNull(dir.manhattanLength()))
-        dir = QPointF(-dir.y(), dir.x()) / dir.manhattanLength();
-    QPointF rotPos = c + dir * ROTATE_HANDLE_OFFSET;
+    dir = dir / sqrt(QPointF::dotProduct(dir, dir));
+    QPointF rotPos = p2 + dir * ROTATE_HANDLE_OFFSET;
     QRectF rotRect(rotPos - QPointF(HANDLE_SIZE/2, HANDLE_SIZE/2),
                    QSize(HANDLE_SIZE, HANDLE_SIZE));
 
@@ -116,9 +111,9 @@ void TransformableLineItem::receiveSceneMousePosition(
             if (status == MouseLeftClickStatus::PRESS && handle == RotateHandle
                 && !isRotateHandling) {
                 m_currentHandle     = RotateHandle;
-                m_mouseDownPos      = mapToScene(scenePos);
+                m_mouseDownPos      = scenePos;
                 m_mouseDownLine     = line();
-                m_centerPoint       = lineCenter();
+                m_centerPoint       = mapToScene(lineCenter());
                 m_initialRotation   = rotation();
                 isRotateHandling    = true;
             }
@@ -133,7 +128,7 @@ void TransformableLineItem::receiveSceneMousePosition(
             QLineF curr(m_centerPoint, scenePos);
             qreal angleDelta = curr.angleTo(start);
             setTransformOriginPoint(lineCenter());
-            setRotation(m_initialRotation - angleDelta);
+            setRotation(m_initialRotation + angleDelta);
         }
     }
 }
@@ -177,7 +172,13 @@ void TransformableLineItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 
 void TransformableLineItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 {
-    Q_UNUSED(event)
     m_currentHandle = NoHandle;
     isRotateHandling = false;
+    QGraphicsLineItem::mouseReleaseEvent(event);
+}
+
+QPainterPath TransformableLineItem::shape() const{
+    QPainterPath rectPath;
+    rectPath.addRect(QRectF(line().p1(), line().p2()).normalized());
+    return rectPath;
 }

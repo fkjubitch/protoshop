@@ -97,6 +97,7 @@ void TransformablePathItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
     Q_UNUSED(event)
     m_currentHandle = NoHandle;
     isRotateHandling= false;
+    QGraphicsPathItem::mouseReleaseEvent(event);
 }
 
 /* ===== 旋转 ===== */
@@ -112,7 +113,7 @@ void TransformablePathItem::receiveSceneMousePosition(
             && h == RotateHandle && !isRotateHandling) {
             m_currentHandle   = RotateHandle;
             m_mouseDownScene  = scenePos;
-            m_center          = pathCenter();
+            m_center          = mapToScene(pathCenter());
             m_initialRotation = rotation();
             isRotateHandling  = true;
         }
@@ -122,11 +123,10 @@ void TransformablePathItem::receiveSceneMousePosition(
         isRotateHandling = false;
     }
     if (isRotateHandling) {
-        const QPointF cScene = mapToScene(m_center);
-        QLineF start(cScene, m_mouseDownScene);
-        QLineF curr(cScene, scenePos);
+        QLineF start(m_center, m_mouseDownScene);
+        QLineF curr(m_center, scenePos);
         qreal angleDelta = start.angleTo(curr);
-        setTransformOriginPoint(m_center);
+        setTransformOriginPoint(pathCenter());
         setRotation(m_initialRotation - angleDelta);
     }
 }

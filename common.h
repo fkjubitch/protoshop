@@ -7,7 +7,9 @@
 #include <QJsonArray>
 #include <QGraphicsItem>
 
-enum PainterStatus {SELECT, PEN, LINE, CURVE, RECT, POLYGON, CIRCLE, ELLIPSE};
+#define PRECISION 0.0001
+
+enum PainterStatus {SELECT, PEN, LINE, CURVE, RECT, POLYGON, CIRCLE, ELLIPSE, FILLSELECT};
 enum MouseLeftClickStatus {PRESS, MOVE, RELEASE};
 enum ColorType {BOARD, FILL};
 
@@ -29,7 +31,7 @@ public:
     // 控制点的大小
     const int HANDLE_SIZE = 10;
     // 旋转控制点距离顶部的偏移
-    const float ROTATE_HANDLE_OFFSET = 15;
+    const float ROTATE_HANDLE_OFFSET = 20;
     // 图形属性
     QColor penColor = Qt::black;
     QColor brushColor = Qt::white; // 填充色
