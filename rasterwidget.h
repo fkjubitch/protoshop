@@ -10,8 +10,8 @@
 #include <QRectF>
 #include <QTransform>
 #include <QKeyEvent>
-#include <QMap> // (Fix 2) 新增
-#include "common.h"   //
+#include <QMap>
+#include "common.h"
 
 class QPaintEvent;
 class QResizeEvent;
@@ -31,7 +31,6 @@ class ControlHandle {
 public:
     HandlePosition pos;
     ControlHandle(HandlePosition p) : pos(p) {}
-    // (Fix 3) 现在需要知道是为哪个矩形绘制
     QRectF getRect(const QRectF& box);
 };
 
@@ -169,15 +168,15 @@ private:
     void drawThickPixel(int x, int y, int width, const QColor &color);
     void resizeBuffer(const QSize &size);
     void redrawAllShapes();
-    void deleteSelectedShapes(); // (Fix 3)
+    void deleteSelectedShapes();
 
     // 变换相关
     MyShape* getShapeAt(const QPoint& p);
     ControlHandle* getHandleAt(const QPoint& p);
-    void createHandles(const QRectF& groupBoundingBox); // (Fix 3)
+    void createHandles(const QRectF& groupBoundingBox);
     void clearHandles();
     void setCursorForHandle(HandlePosition pos);
-    QRectF getSelectedShapesBoundingBox(); // (Fix 3)
+    QRectF getSelectedShapesBoundingBox();
 
 private:
     QImage m_canvasBuffer;
@@ -198,16 +197,15 @@ private:
 
     // --- (核心) 对象列表 和 变换状态 ---
     QList<MyShape*> m_shapeList;
-    QList<MyShape*> m_selectedShapes; // (Fix 3)
+    QList<MyShape*> m_selectedShapes;
     QList<ControlHandle*> m_handles;
     ControlHandle* m_activeHandle = nullptr;
     bool m_isTransforming = false;
     QPoint m_dragStartPosition;
 
-    // (FIX 2) 变换状态
     QMap<MyShape*, QTransform> m_originalTransforms; // 存储每个对象的原始变换
     QRectF m_originalBoundingBox; // 存储组的原始包围盒
-    bool m_isFilling = false; // (FIX 1)
+    bool m_isFilling = false;
 
 public:
     bool isChosen = true;
