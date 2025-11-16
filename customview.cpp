@@ -454,6 +454,7 @@ void CustomView::deleteSelectedItem()
 
 void CustomView::palatteButtonClicked()
 {
+    if(!isChosen) return;
     QColor color = QColorDialog::getColor(Qt::black, nullptr, "选择颜色", QColorDialog::ShowAlphaChannel);
     if(color.isValid()) {
         switch(colorType){

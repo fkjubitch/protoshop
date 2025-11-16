@@ -3,7 +3,7 @@
 #include <QPaintEvent>
 #include <QResizeEvent>
 #include <QMouseEvent>
-#include <QApplication> // (Fix 3) 用于检查 Shift 键
+#include <QApplication> // 用于检查 Shift 键
 #include <QDebug>
 #include <cmath>
 #include <QStack>
@@ -12,6 +12,7 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QColorDialog>
 
 // --- 用于扫描线填充的辅助结构 ---
 struct Edge {
@@ -28,7 +29,7 @@ const qreal PI = 3.141592653589793;
 // ===================================================================
 // --- 1. MyShape 基类实现 ---
 // ===================================================================
-
+// (这部分没有变化)
 void MyShape::translate(const QPointF& delta) {
     transform.translate(delta.x(), delta.y());
 }
@@ -48,7 +49,8 @@ void MyShape::scale(qreal sx, qreal sy, const QPointF& origin) {
 // ===================================================================
 // --- 2. MyShape 子类实现 (与上一版相同) ---
 // ===================================================================
-
+// (这部分没有变化, line 43 - 205)
+// ... (MyLine, MyRect, MyCircle, MyEllipse, MyPolygon, MyPath) ...
 // --- MyLine ---
 MyLine::MyLine(QPointF p1, QPointF p2, QColor p, int w, Qt::PenStyle s)
     : MyShape(p, Qt::transparent, w, s), p1(p1), p2(p2) {
@@ -277,10 +279,10 @@ RasterWidget::RasterWidget(QWidget *parent)
     m_penStyle = Qt::SolidLine;
     m_isDrawing = false;
     m_isTransforming = false;
-    // m_selectedShapes (Fix 3) - m_selectedShapes 在 QList 构造函数中初始化
+    // m_selectedShapes - m_selectedShapes 在 QList 构造函数中初始化
     m_activeHandle = nullptr;
-    isChosen = false; //
-    m_isFilling = false; // (Fix 1)
+    isChosen = true;
+    m_isFilling = false;
 
     resizeBuffer(QSize(800, 600));
     setMouseTracking(true);
@@ -293,26 +295,29 @@ RasterWidget::~RasterWidget()
     qDeleteAll(m_handles);
 }
 
+// 修复：resizeBuffer 只需要调整 m_canvasBuffer
 void RasterWidget::resizeBuffer(const QSize &size)
 {
     if (m_canvasBuffer.size() == size) return;
 
-    QImage newBuffer(size, QImage::Format_ARGB32_Premultiplied);
-    newBuffer.fill(Qt::white);
+    // --- 调整 m_canvasBuffer (Display) ---
+    QImage newCanvasBuffer(size, QImage::Format_ARGB32_Premultiplied);
+    newCanvasBuffer.fill(Qt::white);
+    QPainter p_canvas(&newCanvasBuffer);
+    // 我们不再从旧画布复制，因为 resizeEvent 会调用 redrawAllShapes
+    // p_canvas.drawImage(0, 0, m_canvasBuffer);
+    p_canvas.end();
+    m_canvasBuffer = newCanvasBuffer;
 
-    // 绘制旧内容
-    QPainter p(&newBuffer);
-    p.drawImage(0, 0, m_canvasBuffer);
-    p.end();
+    // --- 移除所有 m_backgroundBuffer 逻辑 ---
 
-    m_canvasBuffer = newBuffer;
     qInfo() << "Raster canvas resized to" << size;
 }
 
 void RasterWidget::resizeEvent(QResizeEvent *event)
 {
     resizeBuffer(event->size());
-    redrawAllShapes();
+    redrawAllShapes(); // 调整大小后重绘所有内容
 }
 
 
@@ -320,28 +325,30 @@ void RasterWidget::resizeEvent(QResizeEvent *event)
 // --- 4. 核心绘图 (PaintEvent 和 Redraw) ---
 // ===================================================================
 
+// 修复：redrawAllShapes 必须始终从 m_shapeList 重建
 void RasterWidget::redrawAllShapes()
 {
-    // 1. 清空画布
+    // 1. 始终用白色填充 m_canvasBuffer
     m_canvasBuffer.fill(Qt::white);
+    // m_canvasBuffer = m_backgroundBuffer.copy(); // 移除
 
-    // 2. 重新绘制所有对象
+    // 2. 在 m_canvasBuffer 上绘制所有矢量形状
+    QPainter p(&m_canvasBuffer);
+    p.setRenderHint(QPainter::Antialiasing);
+
     for (MyShape* shape : m_shapeList) {
-        shape->draw(this);
+        shape->draw(this); // (shape->draw 内部调用 raster... 算法)
     }
 
-    // 3. 绘制选中框和控制点
+    // 3. 绘制选中框和控制点 (在 m_canvasBuffer 上)
     clearHandles();
-    if (!m_selectedShapes.isEmpty()) { // (Fix 3)
+    if (!m_selectedShapes.isEmpty()) {
 
-        QPainter p(&m_canvasBuffer);
-        p.setRenderHint(QPainter::Antialiasing);
-
-        // (Fix 3) 如果只选中一个，绘制完整的控制点
+        // 如果只选中一个，绘制完整的控制点
         if (m_selectedShapes.count() == 1) {
             MyShape* shape = m_selectedShapes.first();
             QRectF box = shape->getBoundingBox();
-            createHandles(box); // 创建控制点
+            createHandles(box);
 
             // 绘制包围盒虚线
             p.setPen(QPen(Qt::blue, 1, Qt::DashLine));
@@ -355,15 +362,16 @@ void RasterWidget::redrawAllShapes()
                 p.drawRect(h->getRect(box));
             }
         } else {
-            // (Fix 3) 如果选中多个，只绘制虚线框
+            // 如果选中多个，只绘制虚线框
             p.setPen(QPen(Qt::blue, 1, Qt::DashLine));
             p.setBrush(Qt::NoBrush);
             for (MyShape* shape : m_selectedShapes) {
                 p.drawRect(shape->getBoundingBox());
             }
         }
-        p.end();
     }
+
+    p.end(); // 关闭 Painter
 
     // 4. 触发 paintEvent
     update();
@@ -371,14 +379,15 @@ void RasterWidget::redrawAllShapes()
 
 void RasterWidget::paintEvent(QPaintEvent *event)
 {
+    // (这部分没有变化)
     QPainter painter(this);
 
     // 1. 绘制已渲染好的 m_canvasBuffer
     painter.drawImage(0, 0, m_canvasBuffer);
 
     // 2. 绘制 "实时" 预览
-
-    // (FIX 3) 绘制橡皮筋选择框预览
+    // ... (line 307 - 347 保持不变)
+    // 绘制橡皮筋选择框预览
     if (m_isDrawing && m_painterStatus == PainterStatus::SELECT) {
         painter.setPen(QPen(Qt::blue, 1, Qt::DashLine));
         painter.setBrush(QColor(0, 0, 100, 30)); // 半透明蓝色填充
@@ -422,7 +431,8 @@ void RasterWidget::paintEvent(QPaintEvent *event)
 // ===================================================================
 // --- 5. 鼠标和键盘事件 (Fix 2 & 3) ---
 // ===================================================================
-
+// (这部分基本没有变化, 只是 rasterFloodFill 的调用现在指向新逻辑)
+// ... (line 351 - 564 保持不变)
 void RasterWidget::mousePressEvent(QMouseEvent *event)
 {
     // (POLYGON) 右键结束
@@ -430,8 +440,8 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
         if (m_isDrawing && m_tempPoints.size() >= 3) {
             MyPolygon* poly = new MyPolygon(m_tempPoints, m_penColor, m_brushColor, m_penWidth, m_penStyle);
             m_shapeList.append(poly);
-            m_selectedShapes.clear(); // (Fix 3)
-            m_selectedShapes.append(poly); // (Fix 3)
+            m_selectedShapes.clear();
+            m_selectedShapes.append(poly);
             m_isDrawing = false;
             m_tempPoints.clear();
             redrawAllShapes();
@@ -440,9 +450,9 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
     }
 
     if (event->button() != Qt::LeftButton) return;
-    m_dragStartPosition = event->pos(); // (FIX 2) 记录拖拽起始点
+    m_dragStartPosition = event->pos(); // 记录拖拽起始点
 
-    // (FIX 3) (SELECT) 模式逻辑重构
+    // (SELECT) 模式逻辑重构
     if (m_painterStatus == PainterStatus::SELECT) {
 
         // 1. 检查是否点中控制点 (只有1个对象被选中时)
@@ -455,7 +465,7 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
         if (m_activeHandle) {
             // 1a. 点中了控制点
             m_isTransforming = true;
-            // (FIX 2) 保存原始状态
+            // 保存原始状态
             m_originalTransforms.clear();
             m_originalTransforms[m_selectedShapes.first()] = m_selectedShapes.first()->transform;
             m_originalBoundingBox = getSelectedShapesBoundingBox();
@@ -468,7 +478,7 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
             m_isTransforming = true;
             m_activeHandle = new ControlHandle(HandlePosition::Center); // 准备平移
 
-            bool shiftPressed = (QApplication::keyboardModifiers() & Qt::ShiftModifier); // (Fix 3)
+            bool shiftPressed = (QApplication::keyboardModifiers() & Qt::ShiftModifier);
 
             if (!m_selectedShapes.contains(shape)) {
                 // 如果点中的不在当前选区
@@ -479,7 +489,7 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
             }
             // (如果已在选区且按住shift，则不操作，保留多选)
 
-            // (FIX 2) 保存所有选中对象的原始状态
+            // 保存所有选中对象的原始状态
             m_originalTransforms.clear();
             for(MyShape* s : m_selectedShapes) {
                 m_originalTransforms[s] = s->transform;
@@ -491,7 +501,7 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
         }
 
         // 3. 点了空白处
-        m_isDrawing = true; // (FIX 3) 准备画橡皮筋
+        m_isDrawing = true; // 准备画橡皮筋
         m_startPoint = event->pos();
         m_currentPoint = event->pos();
         if (!m_selectedShapes.isEmpty()) {
@@ -528,8 +538,10 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
         update();
         break;
     case PainterStatus::FILLSELECT:
+        // 这里的调用不变，但 rasterFloodFill 的实现变了
         rasterFloodFill(event->pos().x(), event->pos().y(), m_brushColor);
-        update();
+        // 不再需要 update()，因为新的 rasterFloodFill 会调用 redrawAllShapes()
+        // update();
         break;
     default:
         break;
@@ -539,9 +551,9 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
 void RasterWidget::mouseMoveEvent(QMouseEvent *event)
 {
     m_currentPoint = event->pos(); // 总是更新当前点
-    QPointF dragDelta = QPointF(m_currentPoint - m_dragStartPosition); // (FIX 2) 总偏移量
+    QPointF dragDelta = QPointF(m_currentPoint - m_dragStartPosition); // 总偏移量
 
-    // (FIX 2 & 3) (TRANSFORM) 模式
+    // (TRANSFORM) 模式
     if (m_isTransforming && m_painterStatus == PainterStatus::SELECT && !m_selectedShapes.isEmpty()) {
         if (!m_activeHandle) return;
 
@@ -555,13 +567,13 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
         QPointF rotOrigin = m_originalBoundingBox.center();
 
         switch(m_activeHandle->pos) {
-        case HandlePosition::Center: // (Fix 3) 平移 (适用于多选)
+        case HandlePosition::Center: // 平移 (适用于多选)
             for(MyShape* s : m_selectedShapes) {
                 s->translate(dragDelta); // 应用总平移
             }
             break;
 
-        // (Fix 2) 旋转/缩放 (仅当选中1个时才有效)
+            // 旋转 (仅当选中1个时才有效)
         case HandlePosition::Rotate: {
             if (m_selectedShapes.count() != 1) break;
             qreal angle1 = QLineF(rotOrigin, m_dragStartPosition).angle();
@@ -570,45 +582,87 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
             break;
         }
 
-        // (Fix 2) 稳定的缩放逻辑
-        default: {
+            // ==========================================================
+            // ========== 变换修复：基于局部坐标的非等比例缩放 ==========
+            // ==========================================================
+        default: { // Scaling
             if (m_selectedShapes.count() != 1) break;
             MyShape* s = m_selectedShapes.first();
 
-            // 1. 确定缩放原点 (对角)
-            QPointF scaleOrigin;
-            QPointF startHandlePos;
+            // 1. 获取图形的中心（这将是所有缩放的基准点）
+            QPointF scaleOrigin = m_originalBoundingBox.center();
 
-            // (这只是一个示例，完整的8点缩放需要更多数学)
-            if (m_activeHandle->pos == HandlePosition::BottomRight) {
-                scaleOrigin = m_originalBoundingBox.topLeft();
-                startHandlePos = m_originalBoundingBox.bottomRight();
-            } else if (m_activeHandle->pos == HandlePosition::TopLeft) {
-                scaleOrigin = m_originalBoundingBox.bottomRight();
-                startHandlePos = m_originalBoundingBox.topLeft();
-            } else {
-                // 默认 (以中心缩放)
-                scaleOrigin = m_originalBoundingBox.center();
-                startHandlePos = m_dragStartPosition; // (不完美，但能用)
+            // 2. 获取控制柄在拖动开始时的“全局”位置
+            QPointF startHandlePos;
+            switch(m_activeHandle->pos) {
+            case HandlePosition::TopLeft:     startHandlePos = m_originalBoundingBox.topLeft();     break;
+            case HandlePosition::Top:         startHandlePos = QPointF(m_originalBoundingBox.center().x(), m_originalBoundingBox.top());    break;
+            case HandlePosition::TopRight:    startHandlePos = m_originalBoundingBox.topRight();    break;
+            case HandlePosition::Right:       startHandlePos = QPointF(m_originalBoundingBox.right(), m_originalBoundingBox.center().y());  break;
+            case HandlePosition::BottomRight: startHandlePos = m_originalBoundingBox.bottomRight(); break;
+            case HandlePosition::Bottom:      startHandlePos = QPointF(m_originalBoundingBox.center().x(), m_originalBoundingBox.bottom()); break;
+            case HandlePosition::BottomLeft:  startHandlePos = m_originalBoundingBox.bottomLeft();  break;
+            case HandlePosition::Left:        startHandlePos = QPointF(m_originalBoundingBox.left(), m_originalBoundingBox.center().y());   break;
+            default: break; // 不应发生
             }
 
-            // (TODO: 旋转后的缩放仍然很复杂，这里的实现是针对未旋转的包围盒)
-            QLineF v_orig(scaleOrigin, startHandlePos);
-            QLineF v_new(scaleOrigin, startHandlePos + dragDelta);
+            // 3. 获取原始变换的“逆矩阵”
+            //    这将用于将“全局”坐标（如鼠标）转换回图形的“局部”坐标
+            QTransform inv_transform = m_originalTransforms[s].inverted();
 
+            // 4. 将“全局”的控制柄位置和“全局”的当前鼠标位置映射到“局部”坐标
+            QPointF local_handle_pos = inv_transform.map(startHandlePos);
+            QPointF local_mouse_pos  = inv_transform.map(m_currentPoint);
+
+            // 5. 根据“局部”坐标的变化计算 X 和 Y 缩放因子
             qreal sx = 1.0, sy = 1.0;
-            if (v_orig.dx() != 0) sx = v_new.dx() / v_orig.dx();
-            if (v_orig.dy() != 0) sy = v_new.dy() / v_orig.dy();
 
+            if (std::abs(local_handle_pos.x()) > 0.0001) {
+                sx = local_mouse_pos.x() / local_handle_pos.x();
+            }
+            if (std::abs(local_handle_pos.y()) > 0.0001) {
+                sy = local_mouse_pos.y() / local_handle_pos.y();
+            }
+
+            // 6. 根据你点击的控制柄，约束缩放轴
+            switch(m_activeHandle->pos) {
+            // 角落控制柄：允许 X 和 Y 同时缩放
+            case HandlePosition::TopLeft:
+            case HandlePosition::TopRight:
+            case HandlePosition::BottomRight:
+            case HandlePosition::BottomLeft:
+                // sx 和 sy 保持不变
+                break;
+
+                // 局部 X 轴控制柄 (Left/Right)：只允许 sx 缩放
+            case HandlePosition::Left:
+            case HandlePosition::Right:
+                sy = 1.0; // 锁定 Y 轴
+                break;
+
+                // 局部 Y 轴控制柄 (Top/Bottom)：只允许 sy 缩放
+            case HandlePosition::Top:
+            case HandlePosition::Bottom:
+                sx = 1.0; // 锁定 X 轴
+                break;
+            default: break;
+            }
+
+            // 7. 应用缩放。
+            //    我们调用 MyShape::scale，它会围绕“全局”的 scaleOrigin 进行缩放。
+            //    根据要求 #1 和 #3，这个点必须是图形的中心。
             s->scale(sx, sy, scaleOrigin);
             break;
         }
+            // ==========================================================
+            // ========== 变换修复结束 ==========
+            // ==========================================================
         }
         redrawAllShapes();
         return;
     }
 
-    // (FIX 3) (DRAWING - Rubber Band) 模式
+    // (DRAWING - Rubber Band) 模式
     if (m_isDrawing && m_painterStatus == PainterStatus::SELECT) {
         update(); // 触发 paintEvent 来绘制橡皮筋
         return;
@@ -639,6 +693,7 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
 
 void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
 {
+    // ... (line 566 - 631 保持不变)
     if (event->button() != Qt::LeftButton) return;
 
     // (TRANSFORM)
@@ -648,21 +703,21 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
         }
         m_isTransforming = false;
         m_activeHandle = nullptr;
-        m_originalTransforms.clear(); // (Fix 2)
+        m_originalTransforms.clear();
     }
 
     // (DRAWING)
     if (m_isDrawing) {
 
-        // (FIX 3) (SELECT - Rubber Band)
+        // (SELECT - Rubber Band)
         if (m_painterStatus == PainterStatus::SELECT) {
             m_isDrawing = false;
             QRectF rubberBandRect = QRectF(m_startPoint, m_currentPoint).normalized();
 
             m_selectedShapes.clear();
-            for (int i = 0; i < m_shapeList.size(); ++i) { // (Fix 3) 遍历所有
+            for (int i = 0; i < m_shapeList.size(); ++i) { // 遍历所有
                 if (rubberBandRect.intersects(m_shapeList[i]->getBoundingBox())) {
-                    m_selectedShapes.append(m_shapeList[i]); // (Fix 3) 添加所有
+                    m_selectedShapes.append(m_shapeList[i]); // 添加所有
                 }
             }
             redrawAllShapes();
@@ -708,7 +763,7 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
 
         if (newShape) {
             m_shapeList.append(newShape);
-            m_selectedShapes.clear(); // (Fix 3)
+            m_selectedShapes.clear();
             m_selectedShapes.append(newShape);
         }
 
@@ -720,15 +775,17 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
 
 void RasterWidget::keyPressEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Delete && !m_selectedShapes.isEmpty()) { // (Fix 3)
+    // ... (line 633 - 639 保持不变)
+    if (event->key() == Qt::Key_Delete && !m_selectedShapes.isEmpty()) {
         deleteSelectedShapes();
     } else {
         QWidget::keyPressEvent(event);
     }
 }
 
-void RasterWidget::deleteSelectedShapes() // (Fix 3)
+void RasterWidget::deleteSelectedShapes()
 {
+    // ... (line 641 - 651 保持不变)
     if (m_selectedShapes.isEmpty()) return;
     for (MyShape* shape : m_selectedShapes) {
         m_shapeList.removeOne(shape);
@@ -740,9 +797,10 @@ void RasterWidget::deleteSelectedShapes() // (Fix 3)
 }
 
 // ===================================================================
-// --- 6. 槽函数实现 (Fix 3) ---
+// --- 6. 槽函数实现 ---
 // ===================================================================
-
+// (这部分没有变化)
+// ... (line 654 - 707 保持不变)
 void RasterWidget::setPainterStatus(const PainterStatus ps)
 {
     if (m_isDrawing && (m_painterStatus == PainterStatus::POLYGON || m_painterStatus == PainterStatus::PEN)) {
@@ -752,7 +810,7 @@ void RasterWidget::setPainterStatus(const PainterStatus ps)
 
     m_painterStatus = ps;
     if (m_painterStatus != PainterStatus::SELECT) {
-        if (!m_selectedShapes.isEmpty()) { // (Fix 3)
+        if (!m_selectedShapes.isEmpty()) {
             m_selectedShapes.clear();
             redrawAllShapes();
         }
@@ -763,17 +821,17 @@ void RasterWidget::setPenColor(const QColor &color)
 {
     if (m_colorType == ColorType::BOARD) {
         m_penColor = color;
-        for (MyShape* s : m_selectedShapes) s->penColor = color; // (Fix 3)
+        for (MyShape* s : m_selectedShapes) s->penColor = color;
     } else { // ColorType::FILL
         m_brushColor = color;
-        for (MyShape* s : m_selectedShapes) s->brushColor = color; // (Fix 3)
+        for (MyShape* s : m_selectedShapes) s->brushColor = color;
     }
     if(!m_selectedShapes.isEmpty()) redrawAllShapes();
 }
 
 void RasterWidget::setBrushColor(const QColor &color) {
     m_brushColor = color;
-    for (MyShape* s : m_selectedShapes) { // (Fix 3)
+    for (MyShape* s : m_selectedShapes) {
         s->brushColor = color;
     }
     if(!m_selectedShapes.isEmpty()) redrawAllShapes();
@@ -785,7 +843,7 @@ void RasterWidget::setColorType(const ColorType type) {
 
 void RasterWidget::setPenWidth(int width) {
     m_penWidth = width;
-    for (MyShape* s : m_selectedShapes) { // (Fix 3)
+    for (MyShape* s : m_selectedShapes) {
         s->penWidth = width;
     }
     if(!m_selectedShapes.isEmpty()) redrawAllShapes();
@@ -793,35 +851,38 @@ void RasterWidget::setPenWidth(int width) {
 
 void RasterWidget::setPenStyle(Qt::PenStyle style) {
     m_penStyle = style;
-    for (MyShape* s : m_selectedShapes) { // (Fix 3)
+    for (MyShape* s : m_selectedShapes) {
         s->penStyle = style;
     }
     if(!m_selectedShapes.isEmpty()) redrawAllShapes();
 }
 
+// 修复：clearCanvas 只需要清除 m_canvasBuffer
 void RasterWidget::clearCanvas()
 {
     qDeleteAll(m_shapeList);
     m_shapeList.clear();
-    m_selectedShapes.clear(); // (Fix 3)
+    m_selectedShapes.clear();
     m_isDrawing = false;
     m_tempPoints.clear();
     m_isTransforming = false;
     m_canvasBuffer.fill(Qt::white);
+    // m_backgroundBuffer.fill(Qt::white); // 移除
     update();
 }
 
 void RasterWidget::onSaveAs()
 {
-    //
+    if(!isChosen) return;
+    // (这部分没有变化)
     QString fileName = QFileDialog::getSaveFileName(this, "保存为", "", "JSON 文件 (*.json);;PNG 图片 (*.png)");
     if (fileName.isEmpty()) return;
 
     if (fileName.endsWith(".png")) {
-        QList<MyShape*> temp = m_selectedShapes; // (Fix 3)
+        QList<MyShape*> temp = m_selectedShapes;
         m_selectedShapes.clear();
         redrawAllShapes(); // 重绘，清除选中框
-        m_canvasBuffer.save(fileName);
+        m_canvasBuffer.save(fileName); // 保存 m_canvasBuffer (它=背景+矢量)
         m_selectedShapes = temp; // 恢复
         redrawAllShapes();
     } else if (fileName.endsWith(".json")) {
@@ -829,17 +890,36 @@ void RasterWidget::onSaveAs()
     }
 }
 
+void RasterWidget::palatteButtonClicked()
+{
+    if(!isChosen) return;
+    // QColor initialColor = (m_colorType == ColorType::BOARD) ? m_penColor : m_brushColor;
+    QString title = (m_colorType == ColorType::BOARD) ? "选择边框颜色" : "选择填充颜色";
+
+    QColor color = QColorDialog::getColor(Qt::black, nullptr, title, QColorDialog::ShowAlphaChannel);
+
+    if(color.isValid()) {
+        if (m_colorType == ColorType::BOARD) {
+            setPenColor(color);
+        } else { // ColorType::FILL
+            setBrushColor(color);
+        }
+    }
+}
+
 void RasterWidget::onOpen()
 {
-    //
+    if(!isChosen) return;
+    // TODO
     qWarning() << "JSON open not implemented for RasterWidget yet.";
 }
 
 
 // ===================================================================
-// --- 7. 变换/控制点 辅助函数 (Fix 3) ---
+// --- 7. 变换/控制点 辅助函数 ---
 // ===================================================================
-
+// (这部分没有变化)
+// ... (line 742 - 819 保持不变)
 MyShape* RasterWidget::getShapeAt(const QPoint& p) {
     for (int i = m_shapeList.size() - 1; i >= 0; --i) {
         if (m_shapeList[i]->contains(p)) {
@@ -891,7 +971,7 @@ void RasterWidget::createHandles(const QRectF& groupBoundingBox) {
     m_handles << new ControlHandle(HandlePosition::Rotate);
 }
 
-QRectF ControlHandle::getRect(const QRectF& box) { // (Fix 3)
+QRectF ControlHandle::getRect(const QRectF& box) {
     const int SIZE = 10; // (HANDLE_SIZE)
     QPointF center;
 
@@ -929,7 +1009,8 @@ void RasterWidget::setCursorForHandle(HandlePosition pos) {
 // ===================================================================
 // --- 8. (真实) 光栅化算法 (非作弊) ---
 // ===================================================================
-
+// (这部分没有变化，它们是 MyShape::draw 所依赖的)
+// ... (line 822 - 948 保持不变)
 void RasterWidget::drawPixel(int x, int y, const QColor &color) {
     if (m_canvasBuffer.rect().contains(x, y)) {
         m_canvasBuffer.setPixelColor(x, y, color);
@@ -1102,44 +1183,26 @@ void RasterWidget::rasterScanFillPolygon(const QVector<QPoint> &points, const QC
     }
 }
 
-void RasterWidget::rasterFloodFill(int x, int y, const QColor &fillColor) {
-    // (Flood Fill)
 
-    // (FIX 1)
+// ==========================================================
+// ========== 修复：重写填充工具为“对象填充” ==========
+// ==========================================================
+void RasterWidget::rasterFloodFill(int x, int y, const QColor &fillColor) {
     if (m_isFilling) return;
     m_isFilling = true;
 
-    if (!m_canvasBuffer.rect().contains(x, y)) {
-        m_isFilling = false;
-        return;
+    // 找到点击位置的形状
+    MyShape* shape = getShapeAt(QPoint(x, y));
+
+    if (shape) {
+        // 更改此形状对象的画刷颜色
+        shape->brushColor = fillColor;
+
+        // 触发一次完整的重绘
+        redrawAllShapes();
     }
 
-    QColor targetColor = m_canvasBuffer.pixelColor(x, y);
+    // 不再需要 "烘焙" 到 m_backgroundBuffer
 
-    if (fillColor == targetColor) {
-        m_isFilling = false; // (FIX 1) 必须在这里返回前重置标志
-        return;
-    }
-
-    QStack<QPoint> stack;
-    stack.push(QPoint(x, y));
-
-    while (!stack.isEmpty()) {
-        QPoint p = stack.pop();
-        int cx = p.x(); int cy = p.y();
-
-        if (!m_canvasBuffer.rect().contains(cx, cy)) {
-            continue;
-        }
-
-        if (m_canvasBuffer.pixelColor(cx, cy) == targetColor) {
-            drawPixel(cx, cy, fillColor);
-            stack.push(QPoint(cx + 1, cy));
-            stack.push(QPoint(cx - 1, cy));
-            stack.push(QPoint(cx, cy + 1));
-            stack.push(QPoint(cx, cy - 1));
-        }
-    }
-
-    m_isFilling = false; // (FIX 1)
+    m_isFilling = false;
 }

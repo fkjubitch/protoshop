@@ -145,6 +145,7 @@ public slots:
     void clearCanvas();
     void onOpen();
     void onSaveAs();
+    void palatteButtonClicked();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -209,7 +210,7 @@ private:
     bool m_isFilling = false; // (FIX 1)
 
 public:
-    bool isChosen = false;
+    bool isChosen = true;
 };
 
 #endif

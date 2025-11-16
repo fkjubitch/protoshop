@@ -84,13 +84,13 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->revokeAction, &QAction::triggered, ui->graphicsView, &CustomView::onRevoke);
     connect(ui->undoAction, &QAction::triggered, ui->graphicsView, &CustomView::onUndo);
     // raster TODO
-    // connect(ui->rasterWidget, &CustomView::sendMousePos, this, &MainWindow::receiveMousePos);
-    // connect(ui->palatteButton, &QPushButton::clicked, ui->rasterWidget, &CustomView::palatteButtonClicked);
-    // connect(ui->delete_action, &QAction::triggered, ui->rasterWidget, &CustomView::onDeleteActionClicked);
-    // connect(ui->saveAction, &QAction::triggered, ui->rasterWidget, &CustomView::onSaveAs);
-    // connect(ui->openAction, &QAction::triggered, ui->rasterWidget, &CustomView::onOpen);
-    // connect(ui->revokeAction, &QAction::triggered, ui->rasterWidget, &CustomView::onRevoke);
-    // connect(ui->undoAction, &QAction::triggered, ui->rasterWidget, &CustomView::onUndo);
+    // connect(ui->rasterWidget, &RasterWidget::sendMousePos, this, &MainWindow::receiveMousePos);
+    connect(ui->palatteButton, &QPushButton::clicked, ui->rasterWidget, &RasterWidget::palatteButtonClicked);
+    // connect(ui->delete_action, &QAction::triggered, ui->rasterWidget, &RasterWidget::onDeleteActionClicked);
+    connect(ui->saveAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onSaveAs);
+    connect(ui->openAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onOpen);
+    // connect(ui->revokeAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onRevoke);
+    // connect(ui->undoAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onUndo);
 
     connect(ui->rectSelectAction, &QAction::triggered, ui->selectButton, &QPushButton::click);
     connect(ui->penAction, &QAction::triggered, ui->penButton, &QPushButton::click);
