@@ -476,6 +476,7 @@ void CustomView::onDeleteActionClicked()
 
 void CustomView::onSaveAs()
 {
+    if (!isChosen) return;
     QString filter = "PNG 图片 (*.png);;JSON 源码 (*.json)";
     QString fileName = QFileDialog::getSaveFileName(this, "保存为", "", filter);
     if (fileName.isEmpty()) return;
@@ -504,6 +505,7 @@ void CustomView::onSaveAs()
 
 void CustomView::onOpen()
 {
+    if (!isChosen) return;
     QString fileName = QFileDialog::getOpenFileName(this, "打开", "", "JSON 源码 (*.json)");
     if (fileName.isEmpty()) return;
 
@@ -542,6 +544,7 @@ void CustomView::restoreSceneState(const QJsonArray &state)
 
 void CustomView::onRevoke()
 {
+    if (!isChosen) return;
     if (undoStack.size() <= 1) return;
 
     redoStack.push(undoStack.pop());
@@ -550,6 +553,7 @@ void CustomView::onRevoke()
 
 void CustomView::onUndo()
 {
+    if (!isChosen) return;
     if (redoStack.isEmpty()) return;
 
     undoStack.push(redoStack.pop());

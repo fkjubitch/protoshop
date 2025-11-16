@@ -64,6 +64,12 @@ MainWindow::MainWindow(QWidget *parent)
     lineTypeActionGroup->setExclusive(true);
     ui->solidAction->setChecked(true);
 
+    implMethodActionGroup = new QActionGroup(this);
+    implMethodActionGroup->addAction(ui->rasterAction);
+    implMethodActionGroup->addAction(ui->libAction);
+    implMethodActionGroup->setExclusive(true);
+    ui->rasterAction->setChecked(true);
+
     // 创建场景
     m_scene = new QGraphicsScene(ui->graphicsView);
     m_scene->setSceneRect(ui->graphicsView->sceneRect());
@@ -75,9 +81,17 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->delete_action, &QAction::triggered, ui->graphicsView, &CustomView::onDeleteActionClicked);
     connect(ui->saveAction, &QAction::triggered, ui->graphicsView, &CustomView::onSaveAs);
     connect(ui->openAction, &QAction::triggered, ui->graphicsView, &CustomView::onOpen);
-    connect(ui->exitAction, &QAction::triggered, qApp, &QApplication::quit);
     connect(ui->revokeAction, &QAction::triggered, ui->graphicsView, &CustomView::onRevoke);
     connect(ui->undoAction, &QAction::triggered, ui->graphicsView, &CustomView::onUndo);
+    // raster TODO
+    // connect(ui->rasterWidget, &CustomView::sendMousePos, this, &MainWindow::receiveMousePos);
+    // connect(ui->palatteButton, &QPushButton::clicked, ui->rasterWidget, &CustomView::palatteButtonClicked);
+    // connect(ui->delete_action, &QAction::triggered, ui->rasterWidget, &CustomView::onDeleteActionClicked);
+    // connect(ui->saveAction, &QAction::triggered, ui->rasterWidget, &CustomView::onSaveAs);
+    // connect(ui->openAction, &QAction::triggered, ui->rasterWidget, &CustomView::onOpen);
+    // connect(ui->revokeAction, &QAction::triggered, ui->rasterWidget, &CustomView::onRevoke);
+    // connect(ui->undoAction, &QAction::triggered, ui->rasterWidget, &CustomView::onUndo);
+
     connect(ui->rectSelectAction, &QAction::triggered, ui->selectButton, &QPushButton::click);
     connect(ui->penAction, &QAction::triggered, ui->penButton, &QPushButton::click);
     connect(ui->lineAction, &QAction::triggered, ui->lineButton, &QPushButton::click);
@@ -96,6 +110,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->hotkeysHelp, &QAction::triggered, this, &MainWindow::onHelpTriggered);
     connect(ui->about, &QAction::triggered, this, &MainWindow::onAboutTriggered);
     connect(ui->widthAction, &QAction::triggered, this, &MainWindow::onWidthAction);
+    connect(ui->rasterAction, &QAction::triggered, this, &MainWindow::on_rasterActionChecked);
+    connect(ui->libAction, &QAction::triggered, this, &MainWindow::on_libActionChecked);
+    connect(ui->exitAction, &QAction::triggered, qApp, &QApplication::quit);
+    ui->graphicsView->setVisible(false);
+    ui->rasterWidget->setVisible(true);
 }
 
 MainWindow::~MainWindow()
@@ -108,6 +127,7 @@ void MainWindow::on_penButton_clicked()
     if (ui->penButton->isChecked())
     {
         ui->graphicsView->setPainterStatus(PainterStatus::PEN);
+        ui->rasterWidget->setPainterStatus(PainterStatus::PEN);
         ui->penAction->setChecked(true);
     }
 }
@@ -118,6 +138,7 @@ void MainWindow::on_lineButton_clicked()
     if (ui->lineButton->isChecked())
     {
         ui->graphicsView->setPainterStatus(PainterStatus::LINE);
+        ui->rasterWidget->setPainterStatus(PainterStatus::LINE);
         ui->lineAction->setChecked(true);
     }
 }
@@ -128,6 +149,7 @@ void MainWindow::on_rectButton_clicked()
     if (ui->rectButton->isChecked())
     {
         ui->graphicsView->setPainterStatus(PainterStatus::RECT);
+        ui->rasterWidget->setPainterStatus(PainterStatus::RECT);
         ui->rectAction->setChecked(true);
     }
 }
@@ -138,6 +160,7 @@ void MainWindow::on_polygonButton_clicked()
     if (ui->polygonButton->isChecked())
     {
         ui->graphicsView->setPainterStatus(PainterStatus::POLYGON);
+        ui->rasterWidget->setPainterStatus(PainterStatus::POLYGON);
         ui->polygonAction->setChecked(true);
     }
 }
@@ -148,6 +171,7 @@ void MainWindow::on_circleButton_clicked()
     if (ui->circleButton->isChecked())
     {
         ui->graphicsView->setPainterStatus(PainterStatus::CIRCLE);
+        ui->rasterWidget->setPainterStatus(PainterStatus::CIRCLE);
         ui->circleAction->setChecked(true);
     }
 }
@@ -158,6 +182,7 @@ void MainWindow::on_ellipseButton_clicked()
     if (ui->ellipseButton->isChecked())
     {
         ui->graphicsView->setPainterStatus(PainterStatus::ELLIPSE);
+        ui->rasterWidget->setPainterStatus(PainterStatus::ELLIPSE);
         ui->ellipseAction->setChecked(true);
     }
 }
@@ -168,6 +193,7 @@ void MainWindow::on_selectButton_clicked()
     if (ui->selectButton->isChecked())
     {
         ui->graphicsView->setPainterStatus(PainterStatus::SELECT);
+        ui->rasterWidget->setPainterStatus(PainterStatus::SELECT);
         ui->rectSelectAction->setChecked(true);
     }
 }
@@ -186,6 +212,8 @@ void MainWindow::receiveMousePos(QPointF pos)
 void MainWindow::on_spinBox_valueChanged(int arg1)
 {
     ui->graphicsView->penWidth = arg1;
+    ui->rasterWidget->setPenWidth(arg1);
+    ui->rasterWidget->setPenWidth(arg1);
 }
 
 
@@ -193,6 +221,7 @@ void MainWindow::on_solidButton_toggled(bool checked)
 {
     if(checked){
         ui->graphicsView->penStyle = Qt::SolidLine;
+        ui->rasterWidget->setPenStyle(Qt::SolidLine);
         ui->solidAction->setChecked(true);
     }
 }
@@ -202,6 +231,7 @@ void MainWindow::on_dashButton_toggled(bool checked)
 {
     if(checked){
         ui->graphicsView->penStyle = Qt::DashLine;
+        ui->rasterWidget->setPenStyle(Qt::DashLine);
         ui->dashAction->setChecked(true);
     }
 }
@@ -211,6 +241,7 @@ void MainWindow::on_dotButton_toggled(bool checked)
 {
     if(checked){
         ui->graphicsView->penStyle = Qt::DotLine;
+        ui->rasterWidget->setPenStyle(Qt::DotLine);
         ui->dotAction->setChecked(true);
     }
 }
@@ -220,6 +251,7 @@ void MainWindow::on_dashDotButton_toggled(bool checked)
 {
     if(checked){
         ui->graphicsView->penStyle = Qt::DashDotLine;
+        ui->rasterWidget->setPenStyle(Qt::DashDotLine);
         ui->dashDotAction->setChecked(true);
     }
 }
@@ -230,6 +262,7 @@ void MainWindow::on_boardButton_clicked()
     if(ui->boardButton->isChecked())
     {
         ui->graphicsView->colorType = ColorType::BOARD;
+        ui->rasterWidget->setColorType(ColorType::BOARD);
         ui->boardColorAction->setChecked(true);
     }
 }
@@ -240,6 +273,7 @@ void MainWindow::on_fillButton_clicked()
     if(ui->fillButton->isChecked())
     {
         ui->graphicsView->colorType = ColorType::FILL;
+        ui->rasterWidget->setColorType(ColorType::FILL);
         ui->fillColorAction->setChecked(true);
     }
 }
@@ -346,6 +380,7 @@ void MainWindow::keyPressEvent(QKeyEvent *ev)
 void MainWindow::keyCtrlZ()
 {
     ui->graphicsView->onRevoke();
+    //TODO: raster onrevoke 下面也是
 }
 
 void MainWindow::keyCtrlY()
@@ -378,6 +413,7 @@ void MainWindow::onWidthAction()
     if (dlg.exec() == QDialog::Accepted) {
         int w = dlg.intValue();
         ui->graphicsView->penWidth = w;
+        ui->rasterWidget->setPenWidth(w);
         ui->spinBox->setValue(w);
     }
 }
@@ -386,7 +422,28 @@ void MainWindow::on_fillSelectButton_clicked()
 {
     if(ui->fillSelectButton->isChecked()){
         ui->graphicsView->setPainterStatus(PainterStatus::FILLSELECT);
+        ui->rasterWidget->setPainterStatus(PainterStatus::FILLSELECT);
         ui->fillSelectButton->setChecked(true);
+    }
+}
+
+void MainWindow::on_rasterActionChecked(bool checked){
+    if(ui->rasterAction->isChecked()){
+        ui->graphicsView->isChosen = false;
+        ui->graphicsView->setVisible(false);
+        ui->rasterWidget->isChosen = true;
+        ui->rasterWidget->setVisible(true);
+        ui->method->setText("自制光栅");
+    }
+}
+
+void MainWindow::on_libActionChecked(bool checked){
+    if(ui->libAction->isChecked()){
+        ui->graphicsView->isChosen = true;
+        ui->graphicsView->setVisible(true);
+        ui->rasterWidget->isChosen = false;
+        ui->rasterWidget->setVisible(false);
+        ui->method->setText("调库函数");
     }
 }
 

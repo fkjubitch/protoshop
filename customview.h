@@ -64,6 +64,7 @@ public:
     int penWidth = 1; // 线宽
     Qt::PenStyle penStyle = Qt::SolidLine; // 画笔类型
     ColorType colorType = BOARD; // 着色类型
+    bool isChosen = false;
 
 signals:
     void sendMousePos(QPointF pos);

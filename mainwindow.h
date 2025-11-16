@@ -75,6 +75,10 @@ private slots:
 
     void on_fillSelectButton_clicked();
 
+    void on_rasterActionChecked(bool checked);
+
+    void on_libActionChecked(bool checked);
+
 private:
     QButtonGroup* sideBarButtonGroup = nullptr;
     QButtonGroup* colorTypeButtonGroup = nullptr; // 着色类型按钮组
@@ -82,6 +86,7 @@ private:
     QActionGroup* painterActionGroup = nullptr;
     QActionGroup* colorTypeActionGroup = nullptr;
     QActionGroup* lineTypeActionGroup = nullptr;
+    QActionGroup* implMethodActionGroup = nullptr; // 实现方式选择组
     QGraphicsScene* m_scene = nullptr;
 
 public:

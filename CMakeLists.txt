@@ -26,6 +26,7 @@ qt_add_executable(Protoshop
 
     serialize.cpp
     ${app_icon_resource_windows}
+    rasterwidget.h rasterwidget.cpp
 )
 
 target_link_libraries(Protoshop
