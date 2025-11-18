@@ -84,7 +84,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->revokeAction, &QAction::triggered, ui->graphicsView, &CustomView::onRevoke);
     connect(ui->undoAction, &QAction::triggered, ui->graphicsView, &CustomView::onUndo);
     // raster TODO
-    // connect(ui->rasterWidget, &RasterWidget::sendMousePos, this, &MainWindow::receiveMousePos);
+    connect(ui->rasterWidget, &RasterWidget::sendMousePos, this, &MainWindow::receiveMousePos);
     connect(ui->palatteButton, &QPushButton::clicked, ui->rasterWidget, &RasterWidget::palatteButtonClicked);
     // connect(ui->delete_action, &QAction::triggered, ui->rasterWidget, &RasterWidget::onDeleteActionClicked);
     connect(ui->saveAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onSaveAs);

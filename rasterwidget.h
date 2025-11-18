@@ -199,7 +199,11 @@ private:
     QList<MyShape*> m_shapeList;
     QList<MyShape*> m_selectedShapes;
     QList<ControlHandle*> m_handles;
-    ControlHandle* m_activeHandle = nullptr;
+    ControlHandle* m_activeHandle = nullptr; // 注意：在Move中不要使用它
+
+    // [Fix] 新增变量：按值存储当前操作的手柄位置，防止野指针
+    HandlePosition m_currentOpHandlePos = HandlePosition::Center;
+
     bool m_isTransforming = false;
     QPoint m_dragStartPosition;
 
@@ -209,6 +213,9 @@ private:
 
 public:
     bool isChosen = true;
+
+signals:
+    void sendMousePos(QPointF pos);
 };
 
 #endif
