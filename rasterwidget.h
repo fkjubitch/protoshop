@@ -217,6 +217,11 @@ private:
     void deleteSelectedShapes();
     void drawPreview(); // 绘制预览到缓冲
 
+    // **新增：Wu算法反走样绘制函数**
+    void rasterDrawCircleWu(int xc, int yc, int radius, const QColor &color, int width);
+    void rasterDrawEllipseWu(int xc, int yc, int rx, int ry, const QColor &color, int width);
+    QColor colorWithAlpha(const QColor& c, float alpha);
+
     // 变换相关
     MyShape* getShapeAt(const QPoint& p);
     ControlHandle* getHandleAt(const QPoint& p);
@@ -243,16 +248,14 @@ private:
     Qt::PenStyle m_penStyle = Qt::SolidLine;
 
     // 抗锯齿（反走样）相关
-    void applyPostprocessAntialiasing();  // 后处理反走样
-    QImage applyEdgeAwareBlur(const QImage& source); // 边缘感知模糊
-    bool isEdgePixel(const QImage& img, int x, int y); // 边缘检测
-    QColor blendWithNeighbors(const QImage& img, int x, int y, int radius); // 像素混合
+    void applyPostprocessAntialiasing();  // FXAA后处理反走样（替换原高斯模糊）
 
     // 算法选择
     LineAlgorithm m_lineAlgorithm = LineAlgorithm::Bresenham;
     CircleAlgorithm m_circleAlgorithm = CircleAlgorithm::Midpoint;
     EllipseAlgorithm m_ellipseAlgorithm = EllipseAlgorithm::Midpoint;
-    bool m_antialiasing = true;
+    bool m_antialiasing = true; // 默认启用
+    bool m_needsAntialiasing = false;
 
     // --- "实时"绘图的状态 ---
     bool m_isDrawing = false;

@@ -285,6 +285,7 @@ RasterWidget::RasterWidget(QWidget *parent)
     m_currentOpHandlePos = HandlePosition::Center;
     isChosen = true;
     m_isFilling = false;
+    m_antialiasing = true; // 默认启用FXAA反走样
 
     resizeBuffer(QSize(800, 600));
     setMouseTracking(true);
@@ -464,85 +465,78 @@ void RasterWidget::redrawAllShapes()
         }
     }
 
-    // 5. 如果启用反走样，对最终图像进行后处理
-    if (m_antialiasing) {
+    // 5. 应用FXAA后处理反走样（性能优化版）
+    if (m_antialiasing && m_needsAntialiasing) {
         applyPostprocessAntialiasing();
     }
 
     update();
 }
 
+// **FXAA快速近似反走样（替换原有高斯模糊）**
 void RasterWidget::applyPostprocessAntialiasing() {
-    if (!m_currentTargetBuffer) return;
+    if (!m_currentTargetBuffer || !m_antialiasing) return;
 
-    // 对当前目标缓冲区应用边缘感知模糊
-    QImage processed = applyEdgeAwareBlur(*m_currentTargetBuffer);
-    *m_currentTargetBuffer = processed;
-}
+    QImage& img = *m_currentTargetBuffer;
+    QImage temp = img.copy(); // 采样源
 
-QImage RasterWidget::applyEdgeAwareBlur(const QImage& source) {
-    if (source.isNull()) return source;
+    const int w = img.width();
+    const int h = img.height();
 
-    QImage result = source.copy();
-    const int blurRadius = 1; // 3x3内核，可调整
+    // FXAA优化参数（平衡质量与速度）
+    const float FXAA_SPAN_MAX = 8.0f;
+    const float FXAA_REDUCE_MUL = 1.0f/8.0f;
+    const float FXAA_REDUCE_MIN = 1.0f/128.0f;
 
-    // 仅处理边缘像素
-    for (int y = 1; y < source.height() - 1; ++y) {
-        for (int x = 1; x < source.width() - 1; ++x) {
-            if (isEdgePixel(source, x, y)) {
-                result.setPixelColor(x, y, blendWithNeighbors(source, x, y, blurRadius));
+    // 处理有效区域（排除边界）
+    for (int y = 1; y < h - 1; ++y) {
+        for (int x = 1; x < w - 1; ++x) {
+            // 采样3x3邻域亮度（灰度转换）
+            auto getLum = [&](int px, int py) -> float {
+                QColor c = temp.pixelColor(px, py);
+                return 0.299f * c.red() + 0.587f * c.green() + 0.114f * c.blue();
+            };
+
+            float rgbNW = getLum(x-1, y-1);
+            float rgbNE = getLum(x+1, y-1);
+            float rgbSW = getLum(x-1, y+1);
+            float rgbSE = getLum(x+1, y+1);
+            float rgbM = getLum(x, y);
+
+            // 计算边缘对比度
+            float lumaMin = qMin(rgbM, qMin(qMin(rgbNW, rgbNE), qMin(rgbSW, rgbSE)));
+            float lumaMax = qMax(rgbM, qMax(qMax(rgbNW, rgbNE), qMax(rgbSW, rgbSE)));
+            float lumaRange = lumaMax - lumaMin;
+
+            // 对比度阈值判断
+            if (lumaRange < qMax(FXAA_REDUCE_MIN, lumaMax * FXAA_REDUCE_MUL)) {
+                continue;
             }
+
+            // 计算边缘方向
+            float rgbNS = rgbNW + rgbNE - rgbSW - rgbSE;
+            float rgbWE = rgbNW + rgbSW - rgbNE - rgbSE;
+
+            // 选择最短响应方向进行模糊
+            bool isEdge = fabs(rgbNS) >= fabs(rgbWE);
+            float blendFactor = 0.5f - lumaRange / 510.0f;
+            blendFactor *= 0.75f;
+
+            // 采样两个方向像素
+            QColor c1 = temp.pixelColor(x + (isEdge ? 0 : 1), y + (isEdge ? 1 : 0));
+            QColor c2 = temp.pixelColor(x + (isEdge ? 0 : -1), y + (isEdge ? -1 : 0));
+
+            // 混合当前像素
+            int r = img.pixelColor(x, y).red() * (1-blendFactor) +
+                    (c1.red() + c2.red()) * 0.5f * blendFactor;
+            int g = img.pixelColor(x, y).green() * (1-blendFactor) +
+                    (c1.green() + c2.green()) * 0.5f * blendFactor;
+            int b = img.pixelColor(x, y).blue() * (1-blendFactor) +
+                    (c1.blue() + c2.blue()) * 0.5f * blendFactor;
+
+            img.setPixelColor(x, y, QColor(r, g, b));
         }
     }
-
-    return result;
-}
-
-bool RasterWidget::isEdgePixel(const QImage& img, int x, int y) {
-    // 获取当前像素颜色
-    QColor center = img.pixelColor(x, y);
-
-    // 如果当前像素是背景色，不是边缘
-    if (center == Qt::white) return false;
-
-    // 检查周围8个像素
-    for (int dy = -1; dy <= 1; ++dy) {
-        for (int dx = -1; dx <= 1; ++dx) {
-            if (dx == 0 && dy == 0) continue;
-
-            QColor neighbor = img.pixelColor(x + dx, y + dy);
-            // 如果邻居是背景色，说明当前像素在边缘
-            if (neighbor == Qt::white) {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-QColor RasterWidget::blendWithNeighbors(const QImage& img, int x, int y, int radius) {
-    // 简单的盒子模糊（可替换为高斯模糊）
-    int r = 0, g = 0, b = 0, a = 0;
-    int count = 0;
-
-    for (int dy = -radius; dy <= radius; ++dy) {
-        for (int dx = -radius; dx <= radius; ++dx) {
-            int nx = x + dx;
-            int ny = y + dy;
-
-            if (nx >= 0 && nx < img.width() && ny >= 0 && ny < img.height()) {
-                QColor c = img.pixelColor(nx, ny);
-                r += c.red();
-                g += c.green();
-                b += c.blue();
-                a += c.alpha();
-                count++;
-            }
-        }
-    }
-
-    return QColor(r / count, g / count, b / count, a / count);
 }
 
 void RasterWidget::paintEvent(QPaintEvent *event)
@@ -789,6 +783,7 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
     if (event->button() != Qt::LeftButton) return;
 
     if (m_isTransforming) {
+        m_needsAntialiasing = true;
         if (m_currentOpHandlePos == HandlePosition::Center && m_activeHandle) {
             delete m_activeHandle;
         }
@@ -799,6 +794,7 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
     }
 
     if (m_isDrawing) {
+        m_needsAntialiasing = true;
         if (m_painterStatus == PainterStatus::SELECT) {
             m_isDrawing = false;
             QRectF rubberBandRect = QRectF(m_startPoint, m_currentPoint).normalized();
@@ -857,9 +853,13 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
             m_selectedShapes.append(newShape);
 
             m_previewBuffer.fill(Qt::transparent); // 清空预览
-            redrawAllShapes();
-            saveSceneState();
         }
+    }
+
+    if (m_needsAntialiasing) {
+        redrawAllShapes(); // 这次重绘会应用抗锯齿
+        m_needsAntialiasing = false; // 重置
+        saveSceneState();
     }
 }
 
@@ -1125,7 +1125,18 @@ void RasterWidget::setCursorForHandle(HandlePosition pos) {
 void RasterWidget::drawPixel(int x, int y, const QColor &color) {
     if (!m_currentTargetBuffer) return;
     if (m_currentTargetBuffer->rect().contains(x, y)) {
-        m_currentTargetBuffer->setPixelColor(x, y, color);
+        // 优化：alpha预乘提升混合性能
+        if (color.alpha() == 255) {
+            m_currentTargetBuffer->setPixelColor(x, y, color);
+        } else {
+            // 手动alpha混合（比QPainter更快）
+            QColor bg = m_currentTargetBuffer->pixelColor(x, y);
+            qreal a = color.alphaF();
+            int r = color.red() * a + bg.red() * (1 - a);
+            int g = color.green() * a + bg.green() * (1 - a);
+            int b = color.blue() * a + bg.blue() * (1 - a);
+            m_currentTargetBuffer->setPixelColor(x, y, QColor(r, g, b));
+        }
     }
 }
 
@@ -1145,7 +1156,7 @@ void RasterWidget::drawThickPixel(int x, int y, int width, const QColor &color) 
     int r = width / 2;
     for (int iy = -r; iy <= r; ++iy) {
         for (int ix = -r; ix <= r; ++ix) {
-            drawPixel(x + ix, y + iy, color); // drawPixel 内部已处理目标缓冲区
+            drawPixel(x + ix, y + iy, color);
         }
     }
 }
@@ -1217,9 +1228,8 @@ void RasterWidget::rasterDrawLineDDA(int x0, int y0, int x1, int y1, const QColo
     }
 }
 
-// Wu反走样直线算法（实现反走样）
+// **改进的Wu反走样直线算法**
 void RasterWidget::rasterDrawLineWu(int x0, int y0, int x1, int y1, const QColor &color, int width) {
-    // 简化版Wu算法，支持基本反走样
     bool steep = abs(y1 - y0) > abs(x1 - x0);
     if (steep) {
         std::swap(x0, y0);
@@ -1234,20 +1244,21 @@ void RasterWidget::rasterDrawLineWu(int x0, int y0, int x1, int y1, const QColor
     double dy = y1 - y0;
     double gradient = (dx == 0) ? 1.0 : dy / dx;
 
+    // 处理端点
     double xEnd = round(x0);
     double yEnd = y0 + gradient * (xEnd - x0);
     double xGap = 1 - (x0 + 0.5);
     int xPixel1 = xEnd;
     int yPixel1 = int(yEnd);
 
-    // 绘制端点
-    if (steep) {
-        drawPixelAA(yPixel1, xPixel1, (1 - (yEnd - floor(yEnd))) * xGap, color);
-        drawPixelAA(yPixel1 + 1, xPixel1, (yEnd - floor(yEnd)) * xGap, color);
-    } else {
-        drawPixelAA(xPixel1, yPixel1, (1 - (yEnd - floor(yEnd))) * xGap, color);
-        drawPixelAA(xPixel1, yPixel1 + 1, (yEnd - floor(yEnd)) * xGap, color);
-    }
+    auto plot = [&](int x, int y, float alpha) {
+        QColor blendedColor = colorWithAlpha(color, alpha);
+        if (steep) drawPixel(y, x, blendedColor);
+        else drawPixel(x, y, blendedColor);
+    };
+
+    plot(xPixel1, yPixel1, (1 - (yEnd - floor(yEnd))) * xGap);
+    plot(xPixel1, yPixel1 + 1, (yEnd - floor(yEnd)) * xGap);
 
     double intery = yEnd + gradient;
     xEnd = round(x1);
@@ -1256,29 +1267,38 @@ void RasterWidget::rasterDrawLineWu(int x0, int y0, int x1, int y1, const QColor
     int xPixel2 = xEnd;
     int yPixel2 = int(yEnd);
 
-    if (steep) {
-        drawPixelAA(yPixel2, xPixel2, (1 - (yEnd - floor(yEnd))) * xGap, color);
-        drawPixelAA(yPixel2 + 1, xPixel2, (yEnd - floor(yEnd)) * xGap, color);
-    } else {
-        drawPixelAA(xPixel2, yPixel2, (1 - (yEnd - floor(yEnd))) * xGap, color);
-        drawPixelAA(xPixel2, yPixel2 + 1, (yEnd - floor(yEnd)) * xGap, color);
-    }
+    plot(xPixel2, yPixel2, (1 - (yEnd - floor(yEnd))) * xGap);
+    plot(xPixel2, yPixel2 + 1, (yEnd - floor(yEnd)) * xGap);
 
     // 主循环
     for (int x = xPixel1 + 1; x <= xPixel2 - 1; ++x) {
-        if (steep) {
-            drawPixelAA(int(intery), x, 1 - (intery - floor(intery)), color);
-            drawPixelAA(int(intery) + 1, x, intery - floor(intery), color);
-        } else {
-            drawPixelAA(x, int(intery), 1 - (intery - floor(intery)), color);
-            drawPixelAA(x, int(intery) + 1, intery - floor(intery), color);
-        }
+        plot(x, int(intery), 1 - (intery - floor(intery)));
+        plot(x, int(intery) + 1, intery - floor(intery));
         intery += gradient;
+    }
+
+    // 处理线宽
+    if (width > 1) {
+        int halfWidth = width / 2;
+        for (int w = 1; w <= halfWidth; ++w) {
+            rasterDrawLineWu(x0, y0 - w, x1, y1 - w, color, 1);
+            rasterDrawLineWu(x0, y0 + w, x1, y1 + w, color, 1);
+        }
     }
 }
 
-// 圆形绘制（根据算法选择）
+// 辅助函数：生成带透明度的颜色
+QColor RasterWidget::colorWithAlpha(const QColor& c, float alpha) {
+    return QColor(c.red(), c.green(), c.blue(), int(c.alpha() * alpha));
+}
+
+// 圆形绘制（添加Wu反走样分支）
 void RasterWidget::rasterDrawCircle(int xc, int yc, int radius, const QColor &color, int width, Qt::PenStyle style) {
+    if (m_antialiasing && width == 1) {
+        rasterDrawCircleWu(xc, yc, radius, color, width);
+        return;
+    }
+
     if (m_circleAlgorithm == CircleAlgorithm::Bresenham) {
         rasterDrawCircleBresenham(xc, yc, radius, color, width);
     } else {
@@ -1311,6 +1331,49 @@ void RasterWidget::rasterDrawCircle(int xc, int yc, int radius, const QColor &co
     }
 }
 
+// **Wu反走样圆形算法**
+void RasterWidget::rasterDrawCircleWu(int xc, int yc, int radius, const QColor &color, int width) {
+    if (radius <= 0) {
+        drawPixel(xc, yc, color);
+        return;
+    }
+
+    auto drawCircleWuPoints = [&](int x, int y, float alpha) {
+        if (alpha <= 0) return;
+        QColor c = colorWithAlpha(color, alpha);
+        drawPixel(xc + x, yc + y, c);
+        drawPixel(xc - x, yc + y, c);
+        drawPixel(xc + x, yc - y, c);
+        drawPixel(xc - x, yc - y, c);
+        drawPixel(xc + y, yc + x, c);
+        drawPixel(xc - y, yc + x, c);
+        drawPixel(xc + y, yc - x, c);
+        drawPixel(xc - y, yc - x, c);
+    };
+
+    int x = radius;
+    int y = 0;
+    int d = 1 - radius;
+
+    while (x >= y) {
+        // 计算覆盖率实现反走样
+        float coverage = 1.0f;
+        if (d < 0) {
+            coverage = 1.0f - float(-d) / (2.0f * x + 1);
+        }
+
+        drawCircleWuPoints(x, y, coverage);
+
+        if (d < 0) {
+            d += 2 * y + 3;
+        } else {
+            d += 2 * (y - x) + 5;
+            x--;
+        }
+        y++;
+    }
+}
+
 // Bresenham圆算法（第二种）
 void RasterWidget::rasterDrawCircleBresenham(int xc, int yc, int radius, const QColor &color, int width) {
     int x = 0;
@@ -1340,8 +1403,13 @@ void RasterWidget::rasterDrawCircleBresenham(int xc, int yc, int radius, const Q
     }
 }
 
-// 椭圆绘制（根据算法选择）
+// 椭圆绘制（添加Wu反走样分支）
 void RasterWidget::rasterDrawEllipse(int xc, int yc, int rx, int ry, const QColor &color, int width, Qt::PenStyle style) {
+    if (m_antialiasing && width == 1) {
+        rasterDrawEllipseWu(xc, yc, rx, ry, color, width);
+        return;
+    }
+
     if (m_ellipseAlgorithm == EllipseAlgorithm::DDA) {
         rasterDrawEllipseDDA(xc, yc, rx, ry, color, width);
         return;
@@ -1374,6 +1442,63 @@ void RasterWidget::rasterDrawEllipse(int xc, int yc, int rx, int ry, const QColo
         y--; py -= twoRx2;
         if (p > 0) { p += rx2 - py; }
         else { x++; px += twoRy2; p += rx2 - py + px; }
+    }
+}
+
+// **Wu反走样椭圆算法**
+void RasterWidget::rasterDrawEllipseWu(int xc, int yc, int rx, int ry, const QColor &color, int width) {
+    if (rx <= 0 || ry <= 0) return;
+
+    auto drawEllipseWuPoints = [&](int x, int y, float alpha) {
+        QColor c = colorWithAlpha(color, alpha);
+        drawPixel(xc + x, yc + y, c);
+        drawPixel(xc - x, yc + y, c);
+        drawPixel(xc + x, yc - y, c);
+        drawPixel(xc - x, yc - y, c);
+    };
+
+    long rx2 = (long)rx * rx;
+    long ry2 = (long)ry * ry;
+    long twoRx2 = 2 * rx2;
+    long twoRy2 = 2 * ry2;
+    int x = 0;
+    int y = ry;
+    long p = (long)round(ry2 - rx2 * ry + 0.25 * rx2);
+    long px = 0;
+    long py = twoRx2 * y;
+
+    // 区域1
+    while (px < py) {
+        float coverage = 1.0f;
+        if (p < 0) {
+            coverage = 1.0f - float(-p) / (float)(px + py);
+        }
+        drawEllipseWuPoints(x, y, coverage);
+
+        x++;
+        px += twoRy2;
+        if (p < 0) {
+            p += ry2 + px;
+        } else {
+            y--;
+            py -= twoRx2;
+            p += ry2 + px - py;
+        }
+    }
+
+    // 区域2
+    p = (long)round(ry2 * (x + 0.5) * (x + 0.5) + rx2 * (y - 1) * (y - 1) - rx2 * ry2);
+    while (y >= 0) {
+        drawEllipseWuPoints(x, y, 1.0f);
+        y--;
+        py -= twoRx2;
+        if (p > 0) {
+            p += rx2 - py;
+        } else {
+            x++;
+            px += twoRy2;
+            p += rx2 - py + px;
+        }
     }
 }
 
