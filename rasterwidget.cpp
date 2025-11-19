@@ -321,7 +321,7 @@ void RasterWidget::resizeEvent(QResizeEvent *event)
 // ===================================================================
 void RasterWidget::drawPreview()
 {
-    // 1. 总是清空预览缓冲区 - 这是关键！
+    // 1. 总是清空预览缓冲区
     m_previewBuffer.fill(Qt::transparent);
 
     // 2. 如果没有在绘制，直接返回
@@ -330,19 +330,19 @@ void RasterWidget::drawPreview()
     // 3. 设置绘制目标为预览缓冲区
     m_currentTargetBuffer = &m_previewBuffer;
 
-    // 4. 创建QPainter用于绘制橡皮筋框（仅SELECT模式需要）
-    QPainter p(&m_previewBuffer);
-    p.setPen(QPen(m_penColor, m_penWidth, m_penStyle));
-    p.setBrush(m_brushColor.alpha() == 0 ? Qt::NoBrush : m_brushColor);
-
-    // 5. 根据模式绘制预览
+    // 4. 根据模式绘制预览（全部使用光栅化算法）
     switch (m_painterStatus) {
     case PainterStatus::SELECT: {
-        // 绘制橡皮筋选择框
-        p.setPen(QPen(Qt::blue, 1, Qt::DashLine));
-        p.setBrush(Qt::NoBrush);
+        // 手动绘制橡皮筋选择框的四条边
         QRect rect = QRect(m_startPoint, m_currentPoint).normalized();
-        p.drawRect(rect);
+        int left = rect.left(), right = rect.right();
+        int top = rect.top(), bottom = rect.bottom();
+
+        // 使用rasterDrawLine绘制四条边（虚线）
+        rasterDrawLine(left, top, right, top, Qt::blue, 1, Qt::DashLine);     // 上边
+        rasterDrawLine(right, top, right, bottom, Qt::blue, 1, Qt::DashLine); // 右边
+        rasterDrawLine(right, bottom, left, bottom, Qt::blue, 1, Qt::DashLine); // 下边
+        rasterDrawLine(left, bottom, left, top, Qt::blue, 1, Qt::DashLine);   // 左边
         break;
     }
     case PainterStatus::LINE:
@@ -395,9 +395,7 @@ void RasterWidget::drawPreview()
     default: break;
     }
 
-    p.end();
-
-    // 6. 恢复绘制目标为主缓冲区
+    // 5. 恢复绘制目标为主缓冲区
     m_currentTargetBuffer = &m_canvasBuffer;
 }
 
