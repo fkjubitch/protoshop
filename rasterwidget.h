@@ -31,7 +31,7 @@ class ControlHandle {
 public:
     HandlePosition pos;
     ControlHandle(HandlePosition p) : pos(p) {}
-    QRectF getRect(const QRectF& box);
+    QRectF getRect(const QPolygonF& obb);
 };
 
 
@@ -54,6 +54,7 @@ public:
     virtual void draw(RasterWidget* widget) = 0;
     virtual bool contains(const QPointF& p) = 0;
     virtual QRectF getBoundingBox() = 0;
+    virtual QRectF getLocalBoundingBox() = 0; // 获取局部坐标系下的包围盒
     virtual ShapeType getType() = 0;
 
     void translate(const QPointF& delta);
@@ -70,6 +71,7 @@ public:
     void draw(RasterWidget* widget) override;
     bool contains(const QPointF& p) override;
     QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
     ShapeType getType() override { return ShapeType::Line; }
 };
 
@@ -80,6 +82,7 @@ public:
     void draw(RasterWidget* widget) override;
     bool contains(const QPointF& p) override;
     QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
     ShapeType getType() override { return ShapeType::Rect; }
 };
 
@@ -90,6 +93,7 @@ public:
     void draw(RasterWidget* widget) override;
     bool contains(const QPointF& p) override;
     QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
     ShapeType getType() override { return ShapeType::Circle; }
 };
 
@@ -100,6 +104,7 @@ public:
     void draw(RasterWidget* widget) override;
     bool contains(const QPointF& p) override;
     QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
     ShapeType getType() override { return ShapeType::Ellipse; }
 };
 
@@ -110,6 +115,7 @@ public:
     void draw(RasterWidget* widget) override;
     bool contains(const QPointF& p) override;
     QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
     ShapeType getType() override { return ShapeType::Polygon; }
 };
 
@@ -120,6 +126,7 @@ public:
     void draw(RasterWidget* widget) override;
     bool contains(const QPointF& p) override;
     QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
     ShapeType getType() override { return ShapeType::Path; }
 };
 
@@ -173,7 +180,7 @@ private:
     // 变换相关
     MyShape* getShapeAt(const QPoint& p);
     ControlHandle* getHandleAt(const QPoint& p);
-    void createHandles(const QRectF& groupBoundingBox);
+    void createHandles(const QPolygonF& obb);
     void clearHandles();
     void setCursorForHandle(HandlePosition pos);
     QRectF getSelectedShapesBoundingBox();

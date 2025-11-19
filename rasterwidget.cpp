@@ -242,6 +242,31 @@ bool MyPath::contains(const QPointF& p) {
     return false;
 }
 
+// getLocalBoundingBox
+// [MyLine]
+QRectF MyLine::getLocalBoundingBox() {
+    return QRectF(p1, p2).normalized();
+}
+// [MyRect]
+QRectF MyRect::getLocalBoundingBox() {
+    return rect;
+}
+// [MyCircle]
+QRectF MyCircle::getLocalBoundingBox() {
+    return QRectF(-radius, -radius, radius*2, radius*2);
+}
+// [MyEllipse]
+QRectF MyEllipse::getLocalBoundingBox() {
+    return QRectF(-rx, -ry, rx*2, ry*2);
+}
+// [MyPolygon]
+QRectF MyPolygon::getLocalBoundingBox() {
+    return QPolygonF(points).boundingRect();
+}
+// [MyPath]
+QRectF MyPath::getLocalBoundingBox() {
+    return QPolygonF(points).boundingRect();
+}
 
 // ===================================================================
 // --- 3. RasterWidget 构造/析构/初始化 ---
@@ -306,23 +331,40 @@ void RasterWidget::redrawAllShapes()
         shape->draw(this);
     }
 
-    clearHandles(); // 注意：这会删除所有控制点对象，导致 m_activeHandle 变为野指针
+    clearHandles();
     if (!m_selectedShapes.isEmpty()) {
+        p.setPen(QPen(Qt::blue, 1, Qt::DashLine));
+        p.setBrush(Qt::NoBrush);
+
         if (m_selectedShapes.count() == 1) {
             MyShape* shape = m_selectedShapes.first();
-            QRectF box = shape->getBoundingBox();
-            createHandles(box);
-            p.setPen(QPen(Qt::blue, 1, Qt::DashLine));
-            p.setBrush(Qt::NoBrush);
-            p.drawRect(box);
+
+            // [New] 获取旋转后的多边形 (OBB)
+            QPolygonF localRect(shape->getLocalBoundingBox());
+            QPolygonF obb = shape->transform.map(localRect);
+
+            createHandles(obb);
+
+            // 绘制旋转后的边框
+            p.drawPolygon(obb);
+
+            // 绘制控制点
             p.setPen(Qt::black);
             p.setBrush(Qt::white);
             for (ControlHandle* h : m_handles) {
-                p.drawRect(h->getRect(box));
+                p.drawRect(h->getRect(obb));
             }
+
+            // 绘制旋转手柄的连线
+            ControlHandle* rotH = m_handles.last(); // Rotate is last
+            ControlHandle* topH = m_handles[1];     // Top is index 1
+            if (rotH && topH) {
+                p.setPen(Qt::black);
+                p.drawLine(rotH->getRect(obb).center(), topH->getRect(obb).center());
+            }
+
         } else {
-            p.setPen(QPen(Qt::blue, 1, Qt::DashLine));
-            p.setBrush(Qt::NoBrush);
+            // 多选时保持 AABB (简单处理)
             for (MyShape* shape : m_selectedShapes) {
                 p.drawRect(shape->getBoundingBox());
             }
@@ -489,50 +531,53 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
 void RasterWidget::mouseMoveEvent(QMouseEvent *event)
 {
     emit sendMousePos(event->pos());
-
     m_currentPoint = event->pos();
     QPointF dragDelta = QPointF(m_currentPoint - m_dragStartPosition);
 
-    // [Fix] 检查 m_isTransforming 而不是 m_activeHandle
     if (m_isTransforming && m_painterStatus == PainterStatus::SELECT && !m_selectedShapes.isEmpty()) {
 
-        // 重置状态 (每一帧都基于原始状态进行变换，防止误差累积)
+        // 还原状态
         for(MyShape* s : m_selectedShapes) {
             if (m_originalTransforms.contains(s)) {
                 s->transform = m_originalTransforms[s];
             }
         }
 
-        // [注意] 这个 rotOrigin 是包围盒中心，仅用于平移参考，旋转逻辑中我们使用更精确的中心
-        QPointF rotOrigin = m_originalBoundingBox.center();
-
-        // [Fix] 使用保存的 HandlePosition 值
         switch(m_currentOpHandlePos) {
-
-        // --- 平移 ---
         case HandlePosition::Center:
             for(MyShape* s : m_selectedShapes) {
                 s->translate(dragDelta);
             }
             break;
 
-            // --- 旋转 (已修复方向和中心点) ---
         case HandlePosition::Rotate: {
             if (m_selectedShapes.count() != 1) break;
             MyShape* s = m_selectedShapes.first();
 
-            QPointF shapeCenter = m_originalTransforms[s].map(QPointF(0, 0));
-            qDebug() << shapeCenter;
+            // 使用当前transform计算形状中心（因为已经还原到原始状态）
+            QPointF shapeCenter = s->transform.map(QPointF(0, 0));
 
+            // 计算角度
             qreal angle1 = QLineF(shapeCenter, m_dragStartPosition).angle();
             qreal angle2 = QLineF(shapeCenter, m_currentPoint).angle();
+            qreal angleDiff = angle1 - angle2;
 
-            s->transform.rotate(angle1 - angle2);
+            // 检测翻转状态，翻转时反转角度
+            bool invertible = false;
+            QTransform invTrans = s->transform.inverted(&invertible);
+            if (invertible) {
+                // 计算行列式，负值表示有翻转
+                qreal det = s->transform.determinant();
+                if (det < 0) {
+                    angleDiff = -angleDiff;  // 翻转时反转角度
+                }
+            }
+
+            s->transform.rotate(angleDiff);
             break;
         }
 
-            // --- 缩放 ---
-        default: {
+        default: { // Scaling
             if (m_selectedShapes.count() != 1) break;
             MyShape* s = m_selectedShapes.first();
 
@@ -563,22 +608,12 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if (m_isDrawing && m_painterStatus == PainterStatus::SELECT) {
-        update();
-        return;
-    }
-
+    if (m_isDrawing && m_painterStatus == PainterStatus::SELECT) { update(); return; }
     if (m_isDrawing) {
-        if (m_painterStatus == PainterStatus::PEN) {
-            m_tempPoints.append(event->pos());
-            update();
-        } else if (m_painterStatus == PainterStatus::POLYGON) {
-            update();
-        } else {
-            update();
-        }
+        if (m_painterStatus == PainterStatus::PEN) { m_tempPoints.append(event->pos()); update(); }
+        else if (m_painterStatus == PainterStatus::POLYGON) { update(); }
+        else { update(); }
     }
-
     if (m_painterStatus == PainterStatus::SELECT) {
         ControlHandle* h = getHandleAt(event->pos());
         if(h) setCursorForHandle(h->pos);
@@ -825,9 +860,14 @@ QRectF RasterWidget::getSelectedShapesBoundingBox() {
 
 ControlHandle* RasterWidget::getHandleAt(const QPoint& p) {
     if (m_selectedShapes.count() != 1) return nullptr;
-    QRectF box = m_selectedShapes.first()->getBoundingBox();
+
+    MyShape* s = m_selectedShapes.first();
+    // 获取旋转后的 OBB 多边形
+    QPolygonF localPoly(s->getLocalBoundingBox());
+    QPolygonF obb = s->transform.map(localPoly);
+
     for (ControlHandle* h : m_handles) {
-        if (h->getRect(box).contains(p)) {
+        if (h->getRect(obb).contains(p)) {
             return h;
         }
     }
@@ -839,8 +879,8 @@ void RasterWidget::clearHandles() {
     m_handles.clear();
 }
 
-void RasterWidget::createHandles(const QRectF& groupBoundingBox) {
-    if (groupBoundingBox.isNull()) return;
+void RasterWidget::createHandles(const QPolygonF& obb) {
+    if (obb.isEmpty()) return;
     clearHandles();
     m_handles << new ControlHandle(HandlePosition::TopLeft);
     m_handles << new ControlHandle(HandlePosition::Top);
@@ -853,21 +893,47 @@ void RasterWidget::createHandles(const QRectF& groupBoundingBox) {
     m_handles << new ControlHandle(HandlePosition::Rotate);
 }
 
-QRectF ControlHandle::getRect(const QRectF& box) {
+QRectF ControlHandle::getRect(const QPolygonF& obb) {
     const int SIZE = 10;
     QPointF center;
 
+    // obb[0]=TL, obb[1]=TR, obb[2]=BR, obb[3]=BL
+    if (obb.count() < 4) return QRectF();
+
+    QPointF tl = obb[0];
+    QPointF tr = obb[1];
+    QPointF br = obb[2];
+    QPointF bl = obb[3];
+
     switch(pos) {
-    case HandlePosition::TopLeft:     center = box.topLeft(); break;
-    case HandlePosition::Top:         center = QPointF(box.center().x(), box.top()); break;
-    case HandlePosition::TopRight:    center = box.topRight(); break;
-    case HandlePosition::Right:       center = QPointF(box.right(), box.center().y()); break;
-    case HandlePosition::BottomRight: center = box.bottomRight(); break;
-    case HandlePosition::Bottom:      center = QPointF(box.center().x(), box.bottom()); break;
-    case HandlePosition::BottomLeft:  center = box.bottomLeft(); break;
-    case HandlePosition::Left:        center = QPointF(box.left(), box.center().y()); break;
-    case HandlePosition::Rotate:      center = QPointF(box.center().x(), box.top() - 20); break;
-    case HandlePosition::Center:      center = box.center(); break;
+    case HandlePosition::TopLeft:     center = tl; break;
+    case HandlePosition::TopRight:    center = tr; break;
+    case HandlePosition::BottomRight: center = br; break;
+    case HandlePosition::BottomLeft:  center = bl; break;
+
+    case HandlePosition::Top:         center = (tl + tr) / 2.0; break;
+    case HandlePosition::Right:       center = (tr + br) / 2.0; break;
+    case HandlePosition::Bottom:      center = (bl + br) / 2.0; break;
+    case HandlePosition::Left:        center = (bl + tl) / 2.0; break;
+
+    case HandlePosition::Rotate: {
+        // 旋转手柄放在 Top 手柄上方 20px 处 (沿着局部Y轴方向)
+        QPointF topMid = (tl + tr) / 2.0;
+        // 计算向上的向量 (利用 TopLeft -> BottomLeft 向量取反)
+        QLineF upVec(bl, tl);
+        // 归一化并延伸
+        if (upVec.length() > 0) {
+            upVec.setLength(20);
+            center = topMid + (upVec.p2() - upVec.p1());
+        } else {
+            center = topMid + QPointF(0, -20);
+        }
+        break;
+    }
+    case HandlePosition::Center:
+        // 平均值求中心
+        center = (tl + tr + br + bl) / 4.0;
+        break;
     }
     return QRectF(center.x() - SIZE/2, center.y() - SIZE/2, SIZE, SIZE);
 }
