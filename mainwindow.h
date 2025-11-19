@@ -15,6 +15,8 @@
 #include <QVBoxLayout>
 #include <QKeyEvent>
 #include <QInputDialog>
+#include <QMenu>
+#include "common.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -30,18 +32,28 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+private:
+    // 算法选择菜单
+    QMenu* m_lineAlgorithmMenu = nullptr;    // 直线算法菜单
+    QMenu* m_circleAlgorithmMenu = nullptr;  // 圆形算法菜单
+    QMenu* m_ellipseAlgorithmMenu = nullptr; // 椭圆算法菜单
+
+    void createRasterAlgorithmMenus();  // 创建光栅算法菜单
+    void removeRasterAlgorithmMenus();  // 移除光栅算法菜单
+    void handleToolButtonCheck(QPushButton* button, PainterStatus status);
+
 private slots:
     void on_penButton_clicked();
 
-    void on_lineButton_clicked();
+    void on_lineButton_clicked(bool checked = false);
 
     void on_rectButton_clicked();
 
     void on_polygonButton_clicked();
 
-    void on_circleButton_clicked();
+    void on_circleButton_clicked(bool checked = false);
 
-    void on_ellipseButton_clicked();
+    void on_ellipseButton_clicked(bool checked = false);
 
     void on_selectButton_clicked();
 
@@ -78,6 +90,11 @@ private slots:
     void on_rasterActionChecked(bool checked);
 
     void on_libActionChecked(bool checked);
+
+    // 算法选择槽函数
+    void onLineAlgorithmTriggered(QAction* action);
+    void onCircleAlgorithmTriggered(QAction* action);
+    void onEllipseAlgorithmTriggered(QAction* action);
 
 private:
     QButtonGroup* sideBarButtonGroup = nullptr;

@@ -1,6 +1,5 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "common.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -75,6 +74,9 @@ MainWindow::MainWindow(QWidget *parent)
     m_scene->setSceneRect(ui->graphicsView->sceneRect());
     ui->graphicsView->setScene(m_scene);
 
+    // 初始为光栅模式，创建算法菜单
+    createRasterAlgorithmMenus();
+
     // 连接信号与槽
     connect(ui->graphicsView, &CustomView::sendMousePos, this, &MainWindow::receiveMousePos);
     connect(ui->palatteButton, &QPushButton::clicked, ui->graphicsView, &CustomView::palatteButtonClicked);
@@ -115,11 +117,109 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->exitAction, &QAction::triggered, qApp, &QApplication::quit);
     ui->graphicsView->setVisible(false);
     ui->rasterWidget->setVisible(true);
+
+    // 隐藏QPushButton在添加菜单后右侧小三角，防止其占位导致贴图偏左
+    ui->lineButton->setStyleSheet("QPushButton { background-color: rgb(101, 102, 104);} QPushButton::menu-indicator {image: none;width: 0px;}");
+    ui->circleButton->setStyleSheet("QPushButton { background-color: rgb(101, 102, 104);} QPushButton::menu-indicator {image: none;width: 0px;}");
+    ui->ellipseButton->setStyleSheet("QPushButton { background-color: rgb(101, 102, 104);} QPushButton::menu-indicator {image: none;width: 0px;}");
 }
 
 MainWindow::~MainWindow()
 {
+    removeRasterAlgorithmMenus();
     delete ui;
+}
+
+void MainWindow::createRasterAlgorithmMenus()
+{
+    // 直线算法菜单
+    m_lineAlgorithmMenu = new QMenu("直线算法", this);
+    QAction* lineBresenham = m_lineAlgorithmMenu->addAction("Bresenham算法");
+    QAction* lineDDA = m_lineAlgorithmMenu->addAction("DDA算法");
+    lineBresenham->setData(static_cast<int>(LineAlgorithm::Bresenham));
+    lineDDA->setData(static_cast<int>(LineAlgorithm::DDA));
+    lineBresenham->setCheckable(true);
+    lineDDA->setCheckable(true);
+    lineBresenham->setChecked(true); // 默认选中Bresenham
+    ui->lineButton->setMenu(m_lineAlgorithmMenu); // 设置为lineButton的右键菜单
+
+    // 圆形算法菜单
+    m_circleAlgorithmMenu = new QMenu("圆形算法", this);
+    QAction* circleMidpoint = m_circleAlgorithmMenu->addAction("中点圆算法");
+    QAction* circleBresenham = m_circleAlgorithmMenu->addAction("Bresenham圆算法");
+    circleMidpoint->setData(static_cast<int>(CircleAlgorithm::Midpoint));
+    circleBresenham->setData(static_cast<int>(CircleAlgorithm::Bresenham));
+    circleMidpoint->setCheckable(true);
+    circleBresenham->setCheckable(true);
+    circleMidpoint->setChecked(true); // 默认选中Midpoint
+    ui->circleButton->setMenu(m_circleAlgorithmMenu);
+
+    // 椭圆算法菜单
+    m_ellipseAlgorithmMenu = new QMenu("椭圆算法", this);
+    QAction* ellipseMidpoint = m_ellipseAlgorithmMenu->addAction("中点椭圆算法");
+    QAction* ellipseDDA = m_ellipseAlgorithmMenu->addAction("DDA椭圆算法");
+    ellipseMidpoint->setData(static_cast<int>(EllipseAlgorithm::Midpoint));
+    ellipseDDA->setData(static_cast<int>(EllipseAlgorithm::DDA));
+    ellipseMidpoint->setCheckable(true);
+    ellipseDDA->setCheckable(true);
+    ellipseMidpoint->setChecked(true); // 默认选中Midpoint
+    ui->ellipseButton->setMenu(m_ellipseAlgorithmMenu);
+
+    ui->lineButton->setCheckable(true);
+    ui->circleButton->setCheckable(true);
+    ui->ellipseButton->setCheckable(true);
+
+    // 连接菜单触发信号
+    connect(m_lineAlgorithmMenu, &QMenu::triggered, this, [this](QAction* action) {
+        onLineAlgorithmTriggered(action);
+        // 确保按钮被选中
+        if (!ui->lineButton->isChecked()) {
+            ui->lineButton->setChecked(true);
+            on_lineButton_clicked(true);
+        }
+    });
+
+    // 对 circle 和 ellipse 做同样处理
+    connect(m_circleAlgorithmMenu, &QMenu::triggered, this, [this](QAction* action) {
+        onCircleAlgorithmTriggered(action);
+        if (!ui->circleButton->isChecked()) {
+            ui->circleButton->setChecked(true);
+            on_circleButton_clicked(true);
+        }
+    });
+
+    connect(m_ellipseAlgorithmMenu, &QMenu::triggered, this, [this](QAction* action) {
+        onEllipseAlgorithmTriggered(action);
+        if (!ui->ellipseButton->isChecked()) {
+            ui->ellipseButton->setChecked(true);
+            on_ellipseButton_clicked(true);
+        }
+    });
+}
+
+void MainWindow::removeRasterAlgorithmMenus()
+{
+    // 断开信号连接
+    if (m_lineAlgorithmMenu) {
+        disconnect(m_lineAlgorithmMenu, &QMenu::triggered, this, &MainWindow::onLineAlgorithmTriggered);
+        ui->lineButton->setMenu(nullptr); // 移除菜单
+        delete m_lineAlgorithmMenu;
+        m_lineAlgorithmMenu = nullptr;
+    }
+
+    if (m_circleAlgorithmMenu) {
+        disconnect(m_circleAlgorithmMenu, &QMenu::triggered, this, &MainWindow::onCircleAlgorithmTriggered);
+        ui->circleButton->setMenu(nullptr);
+        delete m_circleAlgorithmMenu;
+        m_circleAlgorithmMenu = nullptr;
+    }
+
+    if (m_ellipseAlgorithmMenu) {
+        disconnect(m_ellipseAlgorithmMenu, &QMenu::triggered, this, &MainWindow::onEllipseAlgorithmTriggered);
+        ui->ellipseButton->setMenu(nullptr);
+        delete m_ellipseAlgorithmMenu;
+        m_ellipseAlgorithmMenu = nullptr;
+    }
 }
 
 void MainWindow::on_penButton_clicked()
@@ -133,7 +233,7 @@ void MainWindow::on_penButton_clicked()
 }
 
 
-void MainWindow::on_lineButton_clicked()
+void MainWindow::on_lineButton_clicked(bool checked)
 {
     if (ui->lineButton->isChecked())
     {
@@ -166,7 +266,7 @@ void MainWindow::on_polygonButton_clicked()
 }
 
 
-void MainWindow::on_circleButton_clicked()
+void MainWindow::on_circleButton_clicked(bool checked)
 {
     if (ui->circleButton->isChecked())
     {
@@ -177,7 +277,7 @@ void MainWindow::on_circleButton_clicked()
 }
 
 
-void MainWindow::on_ellipseButton_clicked()
+void MainWindow::on_ellipseButton_clicked(bool checked)
 {
     if (ui->ellipseButton->isChecked())
     {
@@ -427,23 +527,59 @@ void MainWindow::on_fillSelectButton_clicked()
     }
 }
 
-void MainWindow::on_rasterActionChecked(bool checked){
-    if(ui->rasterAction->isChecked()){
+void MainWindow::on_rasterActionChecked(bool checked)
+{
+    if (ui->rasterAction->isChecked()) {
         ui->graphicsView->isChosen = false;
         ui->graphicsView->setVisible(false);
         ui->rasterWidget->isChosen = true;
         ui->rasterWidget->setVisible(true);
         ui->method->setText("自制光栅");
+        ui->openAction->setEnabled(false);
+        createRasterAlgorithmMenus();
     }
 }
 
-void MainWindow::on_libActionChecked(bool checked){
-    if(ui->libAction->isChecked()){
+void MainWindow::on_libActionChecked(bool checked)
+{
+    if (ui->libAction->isChecked()) {
         ui->graphicsView->isChosen = true;
         ui->graphicsView->setVisible(true);
         ui->rasterWidget->isChosen = false;
         ui->rasterWidget->setVisible(false);
         ui->method->setText("调库函数");
+        ui->openAction->setEnabled(true);
+        removeRasterAlgorithmMenus();
     }
 }
 
+void MainWindow::onLineAlgorithmTriggered(QAction* action)
+{
+    LineAlgorithm alg = static_cast<LineAlgorithm>(action->data().toInt());
+    ui->rasterWidget->setLineAlgorithm(alg);
+
+    // 更新选中状态
+    for (QAction* a : m_lineAlgorithmMenu->actions()) {
+        a->setChecked(a == action);
+    }
+}
+
+void MainWindow::onCircleAlgorithmTriggered(QAction* action)
+{
+    CircleAlgorithm alg = static_cast<CircleAlgorithm>(action->data().toInt());
+    ui->rasterWidget->setCircleAlgorithm(alg);
+
+    for (QAction* a : m_circleAlgorithmMenu->actions()) {
+        a->setChecked(a == action);
+    }
+}
+
+void MainWindow::onEllipseAlgorithmTriggered(QAction* action)
+{
+    EllipseAlgorithm alg = static_cast<EllipseAlgorithm>(action->data().toInt());
+    ui->rasterWidget->setEllipseAlgorithm(alg);
+
+    for (QAction* a : m_ellipseAlgorithmMenu->actions()) {
+        a->setChecked(a == action);
+    }
+}

@@ -982,6 +982,7 @@ void RasterWidget::palatteButtonClicked()
 
 void RasterWidget::onOpen()
 {
+    // TODO
     if(!isChosen) return;
     qWarning() << "打开功能未实现.";
 }
