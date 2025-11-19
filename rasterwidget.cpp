@@ -272,6 +272,7 @@ QRectF MyPath::getLocalBoundingBox() {
 RasterWidget::RasterWidget(QWidget *parent)
     : QWidget(parent)
 {
+    m_currentTargetBuffer = &m_canvasBuffer;
     m_painterStatus = PainterStatus::SELECT;
     m_colorType = ColorType::BOARD;
     m_penColor = Qt::black;
@@ -320,18 +321,30 @@ void RasterWidget::resizeEvent(QResizeEvent *event)
 // ===================================================================
 void RasterWidget::drawPreview()
 {
-    // 清空预览缓冲
+    // 1. 总是清空预览缓冲区 - 这是关键！
     m_previewBuffer.fill(Qt::transparent);
 
-    if (!m_isDrawing || m_painterStatus == PainterStatus::SELECT) return;
+    // 2. 如果没有在绘制，直接返回
+    if (!m_isDrawing) return;
 
-    // 创建临时QPainter用于绘制到预览缓冲
+    // 3. 设置绘制目标为预览缓冲区
+    m_currentTargetBuffer = &m_previewBuffer;
+
+    // 4. 创建QPainter用于绘制橡皮筋框（仅SELECT模式需要）
     QPainter p(&m_previewBuffer);
     p.setPen(QPen(m_penColor, m_penWidth, m_penStyle));
     p.setBrush(m_brushColor.alpha() == 0 ? Qt::NoBrush : m_brushColor);
 
-    // 使用光栅化算法绘制预览
+    // 5. 根据模式绘制预览
     switch (m_painterStatus) {
+    case PainterStatus::SELECT: {
+        // 绘制橡皮筋选择框
+        p.setPen(QPen(Qt::blue, 1, Qt::DashLine));
+        p.setBrush(Qt::NoBrush);
+        QRect rect = QRect(m_startPoint, m_currentPoint).normalized();
+        p.drawRect(rect);
+        break;
+    }
     case PainterStatus::LINE:
         rasterDrawLine(m_startPoint.x(), m_startPoint.y(),
                        m_currentPoint.x(), m_currentPoint.y(),
@@ -383,19 +396,25 @@ void RasterWidget::drawPreview()
     }
 
     p.end();
+
+    // 6. 恢复绘制目标为主缓冲区
+    m_currentTargetBuffer = &m_canvasBuffer;
 }
 
 void RasterWidget::redrawAllShapes()
 {
-    // 1. 清空主缓冲
+    // 1. 设置绘制目标为主缓冲区
+    m_currentTargetBuffer = &m_canvasBuffer;
+
+    // 2. 清空主缓冲
     m_canvasBuffer.fill(Qt::white);
 
-    // 2. 绘制所有形状
+    // 3. 绘制所有形状
     for (MyShape* shape : m_shapeList) {
         shape->draw(this);
     }
 
-    // 3. 绘制选择框和控制点（使用光栅化）
+    // 4. 绘制选择框和控制点（使用光栅化）
     if (!m_selectedShapes.isEmpty()) {
         if (m_selectedShapes.count() == 1) {
             MyShape* shape = m_selectedShapes.first();
@@ -694,6 +713,7 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
                     m_selectedShapes.append(m_shapeList[i]);
                 }
             }
+            m_previewBuffer.fill(Qt::transparent);
             redrawAllShapes();
             return;
         }
@@ -791,13 +811,8 @@ void RasterWidget::setPainterStatus(const PainterStatus ps)
 
 void RasterWidget::setPenColor(const QColor &color)
 {
-    if (m_colorType == ColorType::BOARD) {
-        m_penColor = color;
-        for (MyShape* s : m_selectedShapes) s->penColor = color;
-    } else {
-        m_brushColor = color;
-        for (MyShape* s : m_selectedShapes) s->brushColor = color;
-    }
+    m_penColor = color;
+    for (MyShape* s : m_selectedShapes) s->penColor = color;
     if(!m_selectedShapes.isEmpty()) redrawAllShapes();
 }
 
@@ -993,27 +1008,29 @@ void RasterWidget::setCursorForHandle(HandlePosition pos) {
 // --- 8. 光栅化算法 (核心实现) ---
 // ===================================================================
 void RasterWidget::drawPixel(int x, int y, const QColor &color) {
-    if (m_canvasBuffer.rect().contains(x, y)) {
-        m_canvasBuffer.setPixelColor(x, y, color);
+    if (!m_currentTargetBuffer) return;
+    if (m_currentTargetBuffer->rect().contains(x, y)) {
+        m_currentTargetBuffer->setPixelColor(x, y, color);
     }
 }
 
 void RasterWidget::drawPixelAA(int x, int y, qreal alpha, const QColor &color) {
-    if (!m_canvasBuffer.rect().contains(x, y)) return;
+    if (!m_currentTargetBuffer) return;
+    if (!m_currentTargetBuffer->rect().contains(x, y)) return;
 
     // 简单的alpha混合
-    QColor bg = m_canvasBuffer.pixelColor(x, y);
+    QColor bg = m_currentTargetBuffer->pixelColor(x, y);
     int r = bg.red() * (1-alpha) + color.red() * alpha;
     int g = bg.green() * (1-alpha) + color.green() * alpha;
     int b = bg.blue() * (1-alpha) + color.blue() * alpha;
-    m_canvasBuffer.setPixelColor(x, y, QColor(r, g, b, 255));
+    m_currentTargetBuffer->setPixelColor(x, y, QColor(r, g, b, 255));
 }
 
 void RasterWidget::drawThickPixel(int x, int y, int width, const QColor &color) {
     int r = width / 2;
     for (int iy = -r; iy <= r; ++iy) {
         for (int ix = -r; ix <= r; ++ix) {
-            drawPixel(x + ix, y + iy, color);
+            drawPixel(x + ix, y + iy, color); // drawPixel 内部已处理目标缓冲区
         }
     }
 }

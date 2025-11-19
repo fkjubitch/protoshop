@@ -224,6 +224,7 @@ private:
 private:
     QImage m_canvasBuffer;
     QImage m_previewBuffer; // 预览缓冲，减少闪烁
+    QImage* m_currentTargetBuffer = nullptr;
 
     // --- 状态 ---
     PainterStatus m_painterStatus = PainterStatus::SELECT;
