@@ -552,7 +552,6 @@ void MainWindow::on_rasterActionChecked(bool checked)
         ui->rasterWidget->isChosen = true;
         ui->rasterWidget->setVisible(true);
         ui->method->setText("自制光栅");
-        ui->openAction->setEnabled(false);
         createRasterAlgorithmMenus();
     }
 }
@@ -565,7 +564,6 @@ void MainWindow::on_libActionChecked(bool checked)
         ui->rasterWidget->isChosen = false;
         ui->rasterWidget->setVisible(false);
         ui->method->setText("调库函数");
-        ui->openAction->setEnabled(true);
         removeRasterAlgorithmMenus();
     }
 }

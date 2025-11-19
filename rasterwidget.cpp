@@ -970,22 +970,6 @@ void RasterWidget::clearCanvas()
     saveSceneState();
 }
 
-void RasterWidget::onSaveAs()
-{
-    if(!isChosen) return;
-    QString fileName = QFileDialog::getSaveFileName(this, "保存为", "", "PNG 图片 (*.png)");
-    if (fileName.isEmpty()) return;
-
-    if (fileName.endsWith(".png")) {
-        // 合并画布和预览
-        QImage finalImage = m_canvasBuffer.copy();
-        QPainter p(&finalImage);
-        p.drawImage(0, 0, m_previewBuffer);
-        p.end();
-        finalImage.save(fileName);
-    }
-}
-
 void RasterWidget::palatteButtonClicked()
 {
     if(!isChosen) return;
@@ -1000,13 +984,6 @@ void RasterWidget::palatteButtonClicked()
         }
         saveSceneState();
     }
-}
-
-void RasterWidget::onOpen()
-{
-    // TODO
-    if(!isChosen) return;
-    qWarning() << "打开功能未实现.";
 }
 
 // ===================================================================
@@ -1771,4 +1748,77 @@ void RasterWidget::onUndo()
 
     undoStack.push(redoStack.pop());
     restoreSceneState(undoStack.top());
+}
+
+void RasterWidget::onSaveAs()
+{
+    if(!isChosen) return;
+
+    // 参考 CustomView：提供 PNG 和 JSON 两种格式选项
+    QString filter = "PNG 图片 (*.png);;JSON 源码 (*.json)";
+    QString fileName = QFileDialog::getSaveFileName(this, "保存为", "", filter);
+    if (fileName.isEmpty()) return;
+
+    if (fileName.endsWith(".png", Qt::CaseInsensitive)) {
+        // PNG 导出：合并画布和预览缓冲区
+        QImage finalImage = m_canvasBuffer.copy();
+        QPainter p(&finalImage);
+        p.drawImage(0, 0, m_previewBuffer);
+        p.end();
+        finalImage.save(fileName);
+
+    } else if (fileName.endsWith(".json", Qt::CaseInsensitive)) {
+        // JSON 导出：序列化所有形状
+        QJsonArray array;
+        for (MyShape* shape : m_shapeList) {
+            array.append(shapeToJson(shape));
+        }
+
+        QJsonDocument doc(array);
+        QFile file(fileName);
+        if (file.open(QIODevice::WriteOnly)) {
+            file.write(doc.toJson());
+            file.close();
+        }
+    }
+}
+
+void RasterWidget::onOpen()
+{
+    if(!isChosen) return;
+
+    QString fileName = QFileDialog::getOpenFileName(this, "打开", "", "JSON 源码 (*.json)");
+    if (fileName.isEmpty()) return;
+
+    QFile file(fileName);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "无法打开文件:" << fileName;
+        return;
+    }
+
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+
+    if (!doc.isArray()) {
+        qWarning() << "无效的 JSON 格式: 根元素必须是数组";
+        return;
+    }
+
+    // 清空当前状态
+    qDeleteAll(m_shapeList);
+    m_shapeList.clear();
+    m_selectedShapes.clear();
+    clearHandles();
+
+    // 加载形状
+    QJsonArray array = doc.array();
+    for (const QJsonValue &v : array) {
+        MyShape* shape = jsonToShape(v.toObject());
+        if (shape) {
+            m_shapeList.append(shape);
+        }
+    }
+
+    redrawAllShapes();
+    saveSceneState();
 }

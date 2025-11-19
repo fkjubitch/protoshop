@@ -3,6 +3,8 @@
 
 #include <QStack>
 #include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QWidget>
 #include <QImage>
 #include <QColor>
