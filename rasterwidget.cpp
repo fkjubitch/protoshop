@@ -594,9 +594,18 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
         update();
         break;
     case PainterStatus::FILLSELECT:
-        if(m_colorType == ColorType::FILL)
-            rasterFloodFill(event->pos().x(), event->pos().y(), m_brushColor);
+    {
+        MyShape* shape = getShapeAt(event->pos());
+        if (shape) {
+            if (m_colorType == ColorType::BOARD) {
+                shape->penColor = m_penColor;  // 修改边框颜色
+            } else {
+                shape->brushColor = m_brushColor;  // 修改填充颜色
+            }
+            redrawAllShapes();
+        }
         break;
+    }
     default:
         break;
     }
@@ -670,6 +679,13 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
 
         redrawAllShapes();
         return;
+    }
+
+    if (m_isDrawing && m_painterStatus == PainterStatus::PEN) {
+        m_tempPoints.append(event->pos());
+        drawPreview();
+        update();
+        return; // 避免执行后续逻辑
     }
 
     // 更新预览
