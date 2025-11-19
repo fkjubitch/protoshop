@@ -289,6 +289,7 @@ RasterWidget::RasterWidget(QWidget *parent)
     resizeBuffer(QSize(800, 600));
     setMouseTracking(true);
     setFocusPolicy(Qt::ClickFocus);
+    saveSceneState();
 }
 
 RasterWidget::~RasterWidget()
@@ -793,6 +794,7 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
         m_isTransforming = false;
         m_activeHandle = nullptr;
         m_originalParams.clear(); // 清除备份
+        saveSceneState();
     }
 
     if (m_isDrawing) {
@@ -852,11 +854,10 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
             m_shapeList.append(newShape);
             m_selectedShapes.clear();
             m_selectedShapes.append(newShape);
-        }
 
-        if (newShape) {
             m_previewBuffer.fill(Qt::transparent); // 清空预览
             redrawAllShapes();
+            saveSceneState();
         }
     }
 }
@@ -880,6 +881,12 @@ void RasterWidget::deleteSelectedShapes()
     clearHandles();
     m_selectedShapes.clear();
     redrawAllShapes();
+    saveSceneState();
+}
+
+void RasterWidget::onDeleteActionClicked()
+{
+    deleteSelectedShapes();
 }
 
 // ===================================================================
@@ -905,7 +912,10 @@ void RasterWidget::setPenColor(const QColor &color)
 {
     m_penColor = color;
     for (MyShape* s : m_selectedShapes) s->penColor = color;
-    if(!m_selectedShapes.isEmpty()) redrawAllShapes();
+    if(!m_selectedShapes.isEmpty()) {
+        redrawAllShapes();
+        saveSceneState();
+    }
 }
 
 void RasterWidget::setBrushColor(const QColor &color) {
@@ -913,7 +923,10 @@ void RasterWidget::setBrushColor(const QColor &color) {
     for (MyShape* s : m_selectedShapes) {
         s->brushColor = color;
     }
-    if(!m_selectedShapes.isEmpty()) redrawAllShapes();
+    if(!m_selectedShapes.isEmpty()) {
+        redrawAllShapes();
+        saveSceneState();
+    }
 }
 
 void RasterWidget::setColorType(const ColorType type) {
@@ -925,7 +938,10 @@ void RasterWidget::setPenWidth(int width) {
     for (MyShape* s : m_selectedShapes) {
         s->penWidth = width;
     }
-    if(!m_selectedShapes.isEmpty()) redrawAllShapes();
+    if(!m_selectedShapes.isEmpty()) {
+        redrawAllShapes();
+        saveSceneState();
+    }
 }
 
 void RasterWidget::setPenStyle(Qt::PenStyle style) {
@@ -933,7 +949,10 @@ void RasterWidget::setPenStyle(Qt::PenStyle style) {
     for (MyShape* s : m_selectedShapes) {
         s->penStyle = style;
     }
-    if(!m_selectedShapes.isEmpty()) redrawAllShapes();
+    if(!m_selectedShapes.isEmpty()) {
+        redrawAllShapes();
+        saveSceneState();
+    }
 }
 
 void RasterWidget::clearCanvas()
@@ -947,6 +966,7 @@ void RasterWidget::clearCanvas()
     m_canvasBuffer.fill(Qt::white);
     m_previewBuffer.fill(Qt::transparent);
     update();
+    saveSceneState();
 }
 
 void RasterWidget::onSaveAs()
@@ -1441,4 +1461,187 @@ void RasterWidget::rasterFloodFill(int x, int y, const QColor &fillColor) {
         redrawAllShapes();
     }
     m_isFilling = false;
+}
+
+// 序列化辅助函数
+static QJsonObject shapeToJson(MyShape* shape)
+{
+    QJsonObject obj;
+    obj["penColor"] = shape->penColor.name(QColor::HexArgb);
+    obj["brushColor"] = shape->brushColor.name(QColor::HexArgb);
+    obj["penWidth"] = shape->penWidth;
+    obj["penStyle"] = shape->penStyle;
+    obj["position"] = QJsonArray{shape->position.x(), shape->position.y()};
+    obj["rotation"] = shape->rotation;
+    obj["scaleX"] = shape->scaleX;
+    obj["scaleY"] = shape->scaleY;
+
+    // 根据类型存储特定数据
+    switch(shape->getType()) {
+    case ShapeType::Line: {
+        MyLine* line = static_cast<MyLine*>(shape);
+        obj["type"] = "MyLine";
+        obj["p1"] = QJsonArray{line->p1.x(), line->p1.y()};
+        obj["p2"] = QJsonArray{line->p2.x(), line->p2.y()};
+        break;
+    }
+    case ShapeType::Rect: {
+        MyRect* rect = static_cast<MyRect*>(shape);
+        obj["type"] = "MyRect";
+        obj["rect"] = QJsonArray{rect->rect.x(), rect->rect.y(),
+                                 rect->rect.width(), rect->rect.height()};
+        break;
+    }
+    case ShapeType::Circle: {
+        MyCircle* circle = static_cast<MyCircle*>(shape);
+        obj["type"] = "MyCircle";
+        obj["radius"] = circle->radius;
+        break;
+    }
+    case ShapeType::Ellipse: {
+        MyEllipse* ellipse = static_cast<MyEllipse*>(shape);
+        obj["type"] = "MyEllipse";
+        obj["rx"] = ellipse->rx;
+        obj["ry"] = ellipse->ry;
+        break;
+    }
+    case ShapeType::Polygon: {
+        MyPolygon* polygon = static_cast<MyPolygon*>(shape);
+        obj["type"] = "MyPolygon";
+        QJsonArray points;
+        for(const QPointF& p : polygon->points) {
+            points.append(QJsonArray{p.x(), p.y()});
+        }
+        obj["points"] = points;
+        break;
+    }
+    case ShapeType::Path: {
+        MyPath* path = static_cast<MyPath*>(shape);
+        obj["type"] = "MyPath";
+        QJsonArray points;
+        for(const QPointF& p : path->points) {
+            points.append(QJsonArray{p.x(), p.y()});
+        }
+        obj["points"] = points;
+        break;
+    }
+    }
+
+    return obj;
+}
+
+static MyShape* jsonToShape(const QJsonObject& obj)
+{
+    QColor penColor = QColor(obj["penColor"].toString());
+    QColor brushColor = QColor(obj["brushColor"].toString());
+    int penWidth = obj["penWidth"].toInt();
+    Qt::PenStyle penStyle = static_cast<Qt::PenStyle>(obj["penStyle"].toInt());
+
+    QString type = obj["type"].toString();
+    MyShape* shape = nullptr;
+
+    if (type == "MyLine") {
+        QJsonArray p1Arr = obj["p1"].toArray();
+        QJsonArray p2Arr = obj["p2"].toArray();
+        QPointF p1(p1Arr[0].toDouble(), p1Arr[1].toDouble());
+        QPointF p2(p2Arr[0].toDouble(), p2Arr[1].toDouble());
+        shape = new MyLine(p1, p2, penColor, penWidth, penStyle);
+    } else if (type == "MyRect") {
+        QJsonArray rectArr = obj["rect"].toArray();
+        QRectF rect(rectArr[0].toDouble(), rectArr[1].toDouble(),
+                    rectArr[2].toDouble(), rectArr[3].toDouble());
+        shape = new MyRect(rect, penColor, brushColor, penWidth, penStyle);
+    } else if (type == "MyCircle") {
+        qreal radius = obj["radius"].toDouble();
+        shape = new MyCircle(radius, penColor, brushColor, penWidth, penStyle);
+    } else if (type == "MyEllipse") {
+        qreal rx = obj["rx"].toDouble();
+        qreal ry = obj["ry"].toDouble();
+        shape = new MyEllipse(rx, ry, penColor, brushColor, penWidth, penStyle);
+    } else if (type == "MyPolygon") {
+        QJsonArray pointsArr = obj["points"].toArray();
+        QVector<QPoint> points;
+        for (const QJsonValue& v : pointsArr) {
+            QJsonArray pArr = v.toArray();
+            points.append(QPoint(pArr[0].toDouble(), pArr[1].toDouble()));
+        }
+        shape = new MyPolygon(points, penColor, brushColor, penWidth, penStyle);
+    } else if (type == "MyPath") {
+        QJsonArray pointsArr = obj["points"].toArray();
+        QVector<QPoint> points;
+        for (const QJsonValue& v : pointsArr) {
+            QJsonArray pArr = v.toArray();
+            points.append(QPoint(pArr[0].toDouble(), pArr[1].toDouble()));
+        }
+        shape = new MyPath(points, penColor, penWidth, penStyle);
+    }
+
+    if (shape) {
+        QJsonArray posArr = obj["position"].toArray();
+        shape->position = QPointF(posArr[0].toDouble(), posArr[1].toDouble());
+        shape->rotation = obj["rotation"].toDouble();
+        shape->scaleX = obj["scaleX"].toDouble();
+        shape->scaleY = obj["scaleY"].toDouble();
+        shape->recomputeTransform();
+    }
+
+    return shape;
+}
+
+// ===================================================================
+// --- 9. 撤销重做功能实现 ---
+// ===================================================================
+
+void RasterWidget::saveSceneState()
+{
+    QJsonArray state;
+    for (MyShape* shape : m_shapeList) {
+        state.append(shapeToJson(shape));
+    }
+
+    QJsonDocument doc(state);
+    undoStack.push(doc.toJson());
+
+    if (undoStack.size() > maxUndoSteps)
+        undoStack.pop_front();
+
+    redoStack.clear(); // 新操作后清空重做栈
+}
+
+void RasterWidget::restoreSceneState(const QByteArray &stateData)
+{
+    // 清除当前形状
+    qDeleteAll(m_shapeList);
+    m_shapeList.clear();
+    m_selectedShapes.clear();
+    clearHandles();
+
+    // 反序列化状态
+    QJsonDocument doc = QJsonDocument::fromJson(stateData);
+    QJsonArray state = doc.array();
+
+    for (const QJsonValue &v : state) {
+        MyShape* shape = jsonToShape(v.toObject());
+        if (shape) {
+            m_shapeList.append(shape);
+        }
+    }
+
+    redrawAllShapes();
+}
+
+void RasterWidget::onRevoke()
+{
+    if (undoStack.size() <= 1) return; // 至少保留一个初始状态
+
+    redoStack.push(undoStack.pop());
+    restoreSceneState(undoStack.top());
+}
+
+void RasterWidget::onUndo()
+{
+    if (redoStack.isEmpty()) return;
+
+    undoStack.push(redoStack.pop());
+    restoreSceneState(undoStack.top());
 }

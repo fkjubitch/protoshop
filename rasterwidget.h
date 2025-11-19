@@ -1,6 +1,8 @@
 #ifndef RASTERWIDGET_H
 #define RASTERWIDGET_H
 
+#include <QStack>
+#include <QJsonDocument>
 #include <QWidget>
 #include <QImage>
 #include <QColor>
@@ -181,6 +183,9 @@ public slots:
     void onOpen();
     void onSaveAs();
     void palatteButtonClicked();
+    void onDeleteActionClicked();
+    void onRevoke(); // 撤销
+    void onUndo();   // 重做
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -220,6 +225,9 @@ private:
     void setCursorForHandle(HandlePosition pos);
     QRectF getSelectedShapesBoundingBox();
     void drawHandles(); // 使用光栅化绘制控制点
+
+    void saveSceneState();   // 保存当前场景状态
+    void restoreSceneState(const QByteArray &state); // 恢复场景状态
 
 private:
     QImage m_canvasBuffer;
@@ -265,6 +273,10 @@ private:
     QMap<MyShape*, TransformParams> m_originalParams; // 存储分解的原始参数
     QRectF m_originalBoundingBox;
     bool m_isFilling = false;
+
+    const int maxUndoSteps = 50; // 最大撤销步数
+    QStack<QByteArray> undoStack; // 撤销栈 - 存储序列化后的形状数据
+    QStack<QByteArray> redoStack; // 重做栈
 
 public:
     bool isChosen = true;

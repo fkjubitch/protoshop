@@ -88,11 +88,11 @@ MainWindow::MainWindow(QWidget *parent)
     // raster TODO
     connect(ui->rasterWidget, &RasterWidget::sendMousePos, this, &MainWindow::receiveMousePos);
     connect(ui->palatteButton, &QPushButton::clicked, ui->rasterWidget, &RasterWidget::palatteButtonClicked);
-    // connect(ui->delete_action, &QAction::triggered, ui->rasterWidget, &RasterWidget::onDeleteActionClicked);
+    connect(ui->delete_action, &QAction::triggered, ui->rasterWidget, &RasterWidget::onDeleteActionClicked);
     connect(ui->saveAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onSaveAs);
     connect(ui->openAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onOpen);
-    // connect(ui->revokeAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onRevoke);
-    // connect(ui->undoAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onUndo);
+    connect(ui->revokeAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onRevoke);
+    connect(ui->undoAction, &QAction::triggered, ui->rasterWidget, &RasterWidget::onUndo);
 
     connect(ui->rectSelectAction, &QAction::triggered, ui->selectButton, &QPushButton::click);
     connect(ui->penAction, &QAction::triggered, ui->penButton, &QPushButton::click);
@@ -117,6 +117,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->exitAction, &QAction::triggered, qApp, &QApplication::quit);
     ui->graphicsView->setVisible(false);
     ui->rasterWidget->setVisible(true);
+
+    // 开启反采样（抗锯齿），具体实现详见rasterwidget.cpp
+    ui->rasterWidget->setAntialiasing(true);
 
     // 隐藏QPushButton在添加菜单后右侧小三角，防止其占位导致贴图偏左
     ui->lineButton->setStyleSheet("QPushButton { background-color: rgb(101, 102, 104);} QPushButton::menu-indicator {image: none;width: 0px;}");
@@ -479,18 +482,32 @@ void MainWindow::keyPressEvent(QKeyEvent *ev)
 
 void MainWindow::keyCtrlZ()
 {
-    ui->graphicsView->onRevoke();
-    //TODO: raster onrevoke 下面也是
+    if(ui->graphicsView->isVisible()){
+        ui->graphicsView->onRevoke();
+    }
+    else{
+        ui->rasterWidget->onRevoke();
+    }
 }
 
 void MainWindow::keyCtrlY()
 {
-    ui->graphicsView->onUndo();
+    if(ui->graphicsView->isVisible()){
+        ui->graphicsView->onUndo();
+    }
+    else{
+        ui->rasterWidget->onUndo();
+    }
 }
 
 void MainWindow::keyCtrlS()
 {
-    ui->graphicsView->onSaveAs();
+    if(ui->graphicsView->isVisible()){
+        ui->graphicsView->onSaveAs();
+    }
+    else{
+        ui->rasterWidget->onSaveAs();
+    }
 }
 
 void MainWindow::onWidthAction()
