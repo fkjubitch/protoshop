@@ -29,19 +29,21 @@ const qreal PI = 3.141592653589793;
 // --- 1. MyShape 基类实现 ---
 // ===================================================================
 void MyShape::translate(const QPointF& delta) {
-    // 使用右乘 (世界坐标系平移)
+    // 保留但不再使用
     QTransform translation;
     translation.translate(delta.x(), delta.y());
     transform = transform * translation;
 }
 
 void MyShape::rotate(qreal angle, const QPointF& origin) {
+    // 保留但不再使用
     transform.translate(origin.x(), origin.y());
     transform.rotate(angle);
     transform.translate(-origin.x(), -origin.y());
 }
 
 void MyShape::scale(qreal sx, qreal sy, const QPointF& origin) {
+    // 保留但不再使用
     transform.translate(origin.x(), origin.y());
     transform.scale(sx, sy);
     transform.translate(-origin.x(), -origin.y());
@@ -55,9 +57,10 @@ void MyShape::scale(qreal sx, qreal sy, const QPointF& origin) {
 MyLine::MyLine(QPointF p1, QPointF p2, QColor p, int w, Qt::PenStyle s)
     : MyShape(p, Qt::transparent, w, s) {
     QPointF center = (p1 + p2) / 2.0;
-    transform.translate(center.x(), center.y());
+    position = center; // 设置位置
     this->p1 = p1 - center;
     this->p2 = p2 - center;
+    recomputeTransform(); // 计算变换矩阵
 }
 void MyLine::draw(RasterWidget* widget) {
     QPointF p1_screen = transform.map(this->p1);
@@ -83,9 +86,9 @@ bool MyLine::contains(const QPointF& p) {
 // --- MyRect ---
 MyRect::MyRect(QRectF r, QColor p, QColor b, int w, Qt::PenStyle s)
     : MyShape(p, b, w, s) {
-    QPointF center = r.center();
-    transform.translate(center.x(), center.y());
+    position = r.center(); // 设置位置
     this->rect = QRectF(-r.width() / 2, -r.height() / 2, r.width(), r.height());
+    recomputeTransform(); // 计算变换矩阵
 }
 void MyRect::draw(RasterWidget* widget) {
     QPolygonF local_poly;
@@ -110,7 +113,10 @@ bool MyRect::contains(const QPointF& p) {
 
 // --- MyCircle ---
 MyCircle::MyCircle(qreal r, QColor p, QColor b, int w, Qt::PenStyle s)
-    : MyShape(p, b, w, s), radius(r) {}
+    : MyShape(p, b, w, s), radius(r) {
+    // 位置默认为 (0,0)，由外部设置
+    recomputeTransform();
+}
 void MyCircle::draw(RasterWidget* widget) {
     QVector<QPoint> points;
     int segments = std::max(36, (int)(radius / 2));
@@ -139,7 +145,10 @@ bool MyCircle::contains(const QPointF& p) {
 
 // --- MyEllipse ---
 MyEllipse::MyEllipse(qreal rx, qreal ry, QColor p, QColor b, int w, Qt::PenStyle s)
-    : MyShape(p, b, w, s), rx(rx), ry(ry) {}
+    : MyShape(p, b, w, s), rx(rx), ry(ry) {
+    // 位置默认为 (0,0)，由外部设置
+    recomputeTransform();
+}
 void MyEllipse::draw(RasterWidget* widget) {
     QVector<QPoint> points;
     int segments = std::max(36, (int)((rx+ry) / 4));
@@ -175,10 +184,11 @@ MyPolygon::MyPolygon(QVector<QPoint> p, QColor pen, QColor brush, int w, Qt::Pen
         for (const QPoint& pt : p) { center += pt; }
         center /= p.size();
     }
-    transform.translate(center.x(), center.y());
+    position = center; // 设置位置
     for (const QPoint& pt : p) {
         points.append(QPointF(pt) - center);
     }
+    recomputeTransform(); // 计算变换矩阵
 }
 void MyPolygon::draw(RasterWidget* widget) {
     QPolygonF local_poly(points);
@@ -209,10 +219,11 @@ MyPath::MyPath(QVector<QPoint> p, QColor pen, int w, Qt::PenStyle s)
         for (const QPoint& pt : p) { center += pt; }
         center /= p.size();
     }
-    transform.translate(center.x(), center.y());
+    position = center; // 设置位置
     for (const QPoint& pt : p) {
         points.append(QPointF(pt) - center);
     }
+    recomputeTransform(); // 计算变换矩阵
 }
 void MyPath::draw(RasterWidget* widget) {
     QPolygonF local_poly(points);
@@ -243,27 +254,21 @@ bool MyPath::contains(const QPointF& p) {
 }
 
 // getLocalBoundingBox
-// [MyLine]
 QRectF MyLine::getLocalBoundingBox() {
     return QRectF(p1, p2).normalized();
 }
-// [MyRect]
 QRectF MyRect::getLocalBoundingBox() {
     return rect;
 }
-// [MyCircle]
 QRectF MyCircle::getLocalBoundingBox() {
     return QRectF(-radius, -radius, radius*2, radius*2);
 }
-// [MyEllipse]
 QRectF MyEllipse::getLocalBoundingBox() {
     return QRectF(-rx, -ry, rx*2, ry*2);
 }
-// [MyPolygon]
 QRectF MyPolygon::getLocalBoundingBox() {
     return QPolygonF(points).boundingRect();
 }
-// [MyPath]
 QRectF MyPath::getLocalBoundingBox() {
     return QPolygonF(points).boundingRect();
 }
@@ -284,7 +289,7 @@ RasterWidget::RasterWidget(QWidget *parent)
     m_isDrawing = false;
     m_isTransforming = false;
     m_activeHandle = nullptr;
-    m_currentOpHandlePos = HandlePosition::Center; // 初始化
+    m_currentOpHandlePos = HandlePosition::Center;
     isChosen = true;
     m_isFilling = false;
 
@@ -339,7 +344,7 @@ void RasterWidget::redrawAllShapes()
         if (m_selectedShapes.count() == 1) {
             MyShape* shape = m_selectedShapes.first();
 
-            // [New] 获取旋转后的多边形 (OBB)
+            // 获取旋转后的多边形 (OBB)
             QPolygonF localRect(shape->getLocalBoundingBox());
             QPolygonF obb = shape->transform.map(localRect);
 
@@ -450,11 +455,19 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
 
         if (m_activeHandle) {
             m_isTransforming = true;
-            // [Fix] 立即保存手柄类型到成员变量，防止 m_activeHandle 失效
             m_currentOpHandlePos = m_activeHandle->pos;
 
-            m_originalTransforms.clear();
-            m_originalTransforms[m_selectedShapes.first()] = m_selectedShapes.first()->transform;
+            // 备份当前所有分解参数
+            m_originalParams.clear();
+            for(MyShape* s : m_selectedShapes) {
+                TransformParams params;
+                params.position = s->position;
+                params.rotation = s->rotation;
+                params.scaleX = s->scaleX;
+                params.scaleY = s->scaleY;
+                params.transform = s->transform; // 用于鼠标坐标转换
+                m_originalParams[s] = params;
+            }
             m_originalBoundingBox = getSelectedShapesBoundingBox();
             return;
         }
@@ -462,8 +475,7 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
         MyShape* shape = getShapeAt(event->pos());
         if (shape) {
             m_isTransforming = true;
-            m_activeHandle = new ControlHandle(HandlePosition::Center); // 临时对象
-            // [Fix] 保存操作类型
+            m_activeHandle = new ControlHandle(HandlePosition::Center);
             m_currentOpHandlePos = HandlePosition::Center;
 
             bool shiftPressed = (QApplication::keyboardModifiers() & Qt::ShiftModifier);
@@ -475,9 +487,16 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
                 m_selectedShapes.append(shape);
             }
 
-            m_originalTransforms.clear();
+            // 备份当前所有分解参数
+            m_originalParams.clear();
             for(MyShape* s : m_selectedShapes) {
-                m_originalTransforms[s] = s->transform;
+                TransformParams params;
+                params.position = s->position;
+                params.rotation = s->rotation;
+                params.scaleX = s->scaleX;
+                params.scaleY = s->scaleY;
+                params.transform = s->transform;
+                m_originalParams[s] = params;
             }
             m_originalBoundingBox = getSelectedShapesBoundingBox();
 
@@ -536,58 +555,51 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
 
     if (m_isTransforming && m_painterStatus == PainterStatus::SELECT && !m_selectedShapes.isEmpty()) {
 
-        // 还原状态
+        // 1. 还原到原始分解参数
         for(MyShape* s : m_selectedShapes) {
-            if (m_originalTransforms.contains(s)) {
-                s->transform = m_originalTransforms[s];
+            if (m_originalParams.contains(s)) {
+                s->position = m_originalParams[s].position;
+                s->rotation = m_originalParams[s].rotation;
+                s->scaleX = m_originalParams[s].scaleX;
+                s->scaleY = m_originalParams[s].scaleY;
             }
         }
 
         switch(m_currentOpHandlePos) {
-        case HandlePosition::Center:
+        case HandlePosition::Center: { // 平移
             for(MyShape* s : m_selectedShapes) {
-                s->translate(dragDelta);
+                s->position += dragDelta;
             }
             break;
+        }
 
-        case HandlePosition::Rotate: {
+        case HandlePosition::Rotate: { // 旋转
             if (m_selectedShapes.count() != 1) break;
             MyShape* s = m_selectedShapes.first();
 
             // 使用当前transform计算形状中心（因为已经还原到原始状态）
-            QPointF shapeCenter = s->transform.map(QPointF(0, 0));
+            QPointF shapeCenter = s->position;
 
             // 计算角度
             qreal angle1 = QLineF(shapeCenter, m_dragStartPosition).angle();
             qreal angle2 = QLineF(shapeCenter, m_currentPoint).angle();
             qreal angleDiff = angle1 - angle2;
 
-            // 检测翻转状态，翻转时反转角度
-            bool invertible = false;
-            QTransform invTrans = s->transform.inverted(&invertible);
-            if (invertible) {
-                // 计算行列式，负值表示有翻转
-                qreal det = s->transform.determinant();
-                if (det < 0) {
-                    angleDiff = -angleDiff;  // 翻转时反转角度
-                }
-            }
-
-            s->transform.rotate(angleDiff);
+            s->rotation += angleDiff; // 累加旋转角度
             break;
         }
 
-        default: { // Scaling
+        default: { // 缩放
             if (m_selectedShapes.count() != 1) break;
             MyShape* s = m_selectedShapes.first();
 
-            QTransform oldTrans = m_originalTransforms[s];
-            bool invertible = false;
-            QTransform invTrans = oldTrans.inverted(&invertible);
-            if (!invertible) break;
+            // 获取形状的中心
+            QPointF shapeCenter = s->position;
 
+            // 计算鼠标在原始变换空间中的向量
+            QTransform invTrans = m_originalParams[s].transform.inverted();
             QPointF localStart = invTrans.map(m_dragStartPosition);
-            QPointF localCurr  = invTrans.map(m_currentPoint);
+            QPointF localCurr = invTrans.map(m_currentPoint);
 
             qreal sx = 1.0;
             qreal sy = 1.0;
@@ -600,10 +612,22 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
                 sy = localCurr.y() / localStart.y();
             }
 
-            s->transform.scale(sx, sy);
+            // 限制最小缩放值，防止翻转或消失
+            sx = std::max(0.01, sx);
+            sy = std::max(0.01, sy);
+
+            // 应用缩放（直接设置，而不是累乘）
+            s->scaleX = m_originalParams[s].scaleX * sx;
+            s->scaleY = m_originalParams[s].scaleY * sy;
             break;
         }
         }
+
+        // 2. 为所有受影响的形状重新计算变换矩阵
+        for(MyShape* s : m_selectedShapes) {
+            s->recomputeTransform();
+        }
+
         redrawAllShapes();
         return;
     }
@@ -629,16 +653,12 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
     if (event->button() != Qt::LeftButton) return;
 
     if (m_isTransforming) {
-        // 如果是 Center 手柄，需要手动删除（因为它是我们在 mousePress new 出来的）
         if (m_currentOpHandlePos == HandlePosition::Center && m_activeHandle) {
             delete m_activeHandle;
         }
-        // 其他手柄由 redrawAllShapes 自动管理，我们不需要 delete m_activeHandle
-        // 只需要将指针置空，防止后续误用
-
         m_isTransforming = false;
         m_activeHandle = nullptr;
-        m_originalTransforms.clear();
+        m_originalParams.clear(); // 清除备份
     }
 
     if (m_isDrawing) {
@@ -678,12 +698,14 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
         case PainterStatus::CIRCLE: {
             qreal r = std::max(rect.width(), rect.height()) / 2.0;
             newShape = new MyCircle(r, m_penColor, m_brushColor, m_penWidth, m_penStyle);
-            newShape->transform.translate(rect.center().x(), rect.center().y());
+            newShape->position = rect.center(); // 设置位置
+            newShape->recomputeTransform(); // 重新计算
             break;
         }
         case PainterStatus::ELLIPSE: {
             newShape = new MyEllipse(rect.width() / 2.0, rect.height() / 2.0, m_penColor, m_brushColor, m_penWidth, m_penStyle);
-            newShape->transform.translate(rect.center().x(), rect.center().y());
+            newShape->position = rect.center(); // 设置位置
+            newShape->recomputeTransform(); // 重新计算
             break;
         }
         case PainterStatus::POLYGON:

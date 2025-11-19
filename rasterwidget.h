@@ -38,6 +38,15 @@ public:
 // --- 2. 形状基类 ---
 enum class ShapeType { Line, Rect, Circle, Ellipse, Polygon, Path };
 
+// 变换参数结构体，用于备份
+struct TransformParams {
+    QPointF position;
+    qreal rotation;
+    qreal scaleX;
+    qreal scaleY;
+    QTransform transform; // 用于反向映射计算
+};
+
 class MyShape {
 public:
     QColor penColor = Qt::black;
@@ -45,6 +54,12 @@ public:
     int penWidth = 1;
     Qt::PenStyle penStyle = Qt::SolidLine;
     QTransform transform;
+
+    // 新增：分解的变换参数
+    QPointF position = QPointF(0, 0);  // 平移（中心点位置）
+    qreal rotation = 0.0;              // 旋转角度（度）
+    qreal scaleX = 1.0;                // X 缩放
+    qreal scaleY = 1.0;                // Y 缩放
 
 public:
     MyShape(QColor p, QColor b, int w, Qt::PenStyle s)
@@ -57,6 +72,15 @@ public:
     virtual QRectF getLocalBoundingBox() = 0; // 获取局部坐标系下的包围盒
     virtual ShapeType getType() = 0;
 
+    // 关键方法：根据分解参数重新计算总变换矩阵
+    void recomputeTransform() {
+        transform = QTransform(); // 重置为单位矩阵
+        transform.translate(position.x(), position.y());
+        transform.rotate(rotation);
+        transform.scale(scaleX, scaleY);
+    }
+
+    // 原有辅助函数保留，但不再使用
     void translate(const QPointF& delta);
     void rotate(qreal angle, const QPointF& origin);
     void scale(qreal sx, qreal sy, const QPointF& origin);
@@ -206,16 +230,14 @@ private:
     QList<MyShape*> m_shapeList;
     QList<MyShape*> m_selectedShapes;
     QList<ControlHandle*> m_handles;
-    ControlHandle* m_activeHandle = nullptr; // 注意：在Move中不要使用它
+    ControlHandle* m_activeHandle = nullptr;
 
-    // [Fix] 新增变量：按值存储当前操作的手柄位置，防止野指针
     HandlePosition m_currentOpHandlePos = HandlePosition::Center;
-
     bool m_isTransforming = false;
     QPoint m_dragStartPosition;
 
-    QMap<MyShape*, QTransform> m_originalTransforms; // 存储每个对象的原始变换
-    QRectF m_originalBoundingBox; // 存储组的原始包围盒
+    QMap<MyShape*, TransformParams> m_originalParams; // 存储分解的原始参数
+    QRectF m_originalBoundingBox;
     bool m_isFilling = false;
 
 public:
