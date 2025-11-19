@@ -463,7 +463,85 @@ void RasterWidget::redrawAllShapes()
         }
     }
 
+    // 5. 如果启用反走样，对最终图像进行后处理
+    if (m_antialiasing) {
+        applyPostprocessAntialiasing();
+    }
+
     update();
+}
+
+void RasterWidget::applyPostprocessAntialiasing() {
+    if (!m_currentTargetBuffer) return;
+
+    // 对当前目标缓冲区应用边缘感知模糊
+    QImage processed = applyEdgeAwareBlur(*m_currentTargetBuffer);
+    *m_currentTargetBuffer = processed;
+}
+
+QImage RasterWidget::applyEdgeAwareBlur(const QImage& source) {
+    if (source.isNull()) return source;
+
+    QImage result = source.copy();
+    const int blurRadius = 1; // 3x3内核，可调整
+
+    // 仅处理边缘像素
+    for (int y = 1; y < source.height() - 1; ++y) {
+        for (int x = 1; x < source.width() - 1; ++x) {
+            if (isEdgePixel(source, x, y)) {
+                result.setPixelColor(x, y, blendWithNeighbors(source, x, y, blurRadius));
+            }
+        }
+    }
+
+    return result;
+}
+
+bool RasterWidget::isEdgePixel(const QImage& img, int x, int y) {
+    // 获取当前像素颜色
+    QColor center = img.pixelColor(x, y);
+
+    // 如果当前像素是背景色，不是边缘
+    if (center == Qt::white) return false;
+
+    // 检查周围8个像素
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            if (dx == 0 && dy == 0) continue;
+
+            QColor neighbor = img.pixelColor(x + dx, y + dy);
+            // 如果邻居是背景色，说明当前像素在边缘
+            if (neighbor == Qt::white) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+QColor RasterWidget::blendWithNeighbors(const QImage& img, int x, int y, int radius) {
+    // 简单的盒子模糊（可替换为高斯模糊）
+    int r = 0, g = 0, b = 0, a = 0;
+    int count = 0;
+
+    for (int dy = -radius; dy <= radius; ++dy) {
+        for (int dx = -radius; dx <= radius; ++dx) {
+            int nx = x + dx;
+            int ny = y + dy;
+
+            if (nx >= 0 && nx < img.width() && ny >= 0 && ny < img.height()) {
+                QColor c = img.pixelColor(nx, ny);
+                r += c.red();
+                g += c.green();
+                b += c.blue();
+                a += c.alpha();
+                count++;
+            }
+        }
+    }
+
+    return QColor(r / count, g / count, b / count, a / count);
 }
 
 void RasterWidget::paintEvent(QPaintEvent *event)
@@ -1049,14 +1127,8 @@ void RasterWidget::drawThickPixel(int x, int y, int width, const QColor &color) 
     }
 }
 
-// Bresenham直线算法
+// 画直线
 void RasterWidget::rasterDrawLine(int x0, int y0, int x1, int y1, const QColor &color, int width, Qt::PenStyle style) {
-    // 根据算法选择
-    if (m_antialiasing) {
-        rasterDrawLineWu(x0, y0, x1, y1, color, width);
-        return;
-    }
-
     if (m_lineAlgorithm == LineAlgorithm::DDA) {
         rasterDrawLineDDA(x0, y0, x1, y1, color, width);
         return;
@@ -1099,7 +1171,7 @@ void RasterWidget::rasterDrawLine(int x0, int y0, int x1, int y1, const QColor &
     }
 }
 
-// DDA直线算法（第二种算法）
+// DDA直线算法
 void RasterWidget::rasterDrawLineDDA(int x0, int y0, int x1, int y1, const QColor &color, int width) {
     double dx = x1 - x0;
     double dy = y1 - y0;

@@ -234,11 +234,17 @@ private:
     int m_penWidth = 1;
     Qt::PenStyle m_penStyle = Qt::SolidLine;
 
+    // 抗锯齿（反走样）相关
+    void applyPostprocessAntialiasing();  // 后处理反走样
+    QImage applyEdgeAwareBlur(const QImage& source); // 边缘感知模糊
+    bool isEdgePixel(const QImage& img, int x, int y); // 边缘检测
+    QColor blendWithNeighbors(const QImage& img, int x, int y, int radius); // 像素混合
+
     // 算法选择
     LineAlgorithm m_lineAlgorithm = LineAlgorithm::Bresenham;
     CircleAlgorithm m_circleAlgorithm = CircleAlgorithm::Midpoint;
     EllipseAlgorithm m_ellipseAlgorithm = EllipseAlgorithm::Midpoint;
-    bool m_antialiasing = false;
+    bool m_antialiasing = true;
 
     // --- "实时"绘图的状态 ---
     bool m_isDrawing = false;
