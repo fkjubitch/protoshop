@@ -682,6 +682,7 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
                 shape->brushColor = m_brushColor;  // 修改填充颜色
             }
             redrawAllShapes();
+            saveSceneState();
         }
         break;
     }
@@ -997,6 +998,7 @@ void RasterWidget::palatteButtonClicked()
         } else {
             setBrushColor(color);
         }
+        saveSceneState();
     }
 }
 
