@@ -135,8 +135,31 @@ MainWindow::~MainWindow()
 
 void MainWindow::createRasterAlgorithmMenus()
 {
+    QString menuStyle = R"(
+    QMenu {
+        background-color: rgb(101, 102, 104);  /* 菜单背景色，与按钮一致 */
+        border: 1px solid rgb(80, 80, 80);
+    }
+    QMenu::item {
+        color: white;              /* 正常状态文字颜色 */
+        padding: 5px 20px 5px 20px;
+        background-color: transparent;
+    }
+    QMenu::item:selected {         /* 鼠标悬停/选中状态 */
+        background-color: rgb(120, 120, 120);
+        color: white;
+    }
+    QMenu::item:disabled {         /* 禁用状态 */
+        color: rgb(160, 160, 160);
+    }
+    QMenu::separator {             /* 分隔线 */
+        height: 1px;
+        background-color: rgb(80, 80, 80);
+    }
+)";
     // 直线算法菜单
     m_lineAlgorithmMenu = new QMenu("直线算法", this);
+    m_lineAlgorithmMenu->setStyleSheet(menuStyle);
     QAction* lineBresenham = m_lineAlgorithmMenu->addAction("Bresenham算法");
     QAction* lineDDA = m_lineAlgorithmMenu->addAction("DDA算法");
     lineBresenham->setData(static_cast<int>(LineAlgorithm::Bresenham));
@@ -148,6 +171,7 @@ void MainWindow::createRasterAlgorithmMenus()
 
     // 圆形算法菜单
     m_circleAlgorithmMenu = new QMenu("圆形算法", this);
+    m_circleAlgorithmMenu->setStyleSheet(menuStyle);
     QAction* circleMidpoint = m_circleAlgorithmMenu->addAction("中点圆算法");
     QAction* circleBresenham = m_circleAlgorithmMenu->addAction("Bresenham圆算法");
     circleMidpoint->setData(static_cast<int>(CircleAlgorithm::Midpoint));
@@ -159,6 +183,7 @@ void MainWindow::createRasterAlgorithmMenus()
 
     // 椭圆算法菜单
     m_ellipseAlgorithmMenu = new QMenu("椭圆算法", this);
+    m_ellipseAlgorithmMenu->setStyleSheet(menuStyle);
     QAction* ellipseMidpoint = m_ellipseAlgorithmMenu->addAction("中点椭圆算法");
     QAction* ellipseDDA = m_ellipseAlgorithmMenu->addAction("DDA椭圆算法");
     ellipseMidpoint->setData(static_cast<int>(EllipseAlgorithm::Midpoint));
