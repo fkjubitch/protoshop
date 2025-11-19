@@ -24,7 +24,6 @@ bool compareEdges(const Edge& a, const Edge& b) { return a.x < b.x; }
 
 const qreal PI = 3.141592653589793;
 
-
 // ===================================================================
 // --- 1. MyShape 基类实现 ---
 // ===================================================================
@@ -52,7 +51,6 @@ void MyShape::scale(qreal sx, qreal sy, const QPointF& origin) {
 // ===================================================================
 // --- 2. MyShape 子类实现 ---
 // ===================================================================
-
 // --- MyLine ---
 MyLine::MyLine(QPointF p1, QPointF p2, QColor p, int w, Qt::PenStyle s)
     : MyShape(p, Qt::transparent, w, s) {
@@ -82,7 +80,6 @@ bool MyLine::contains(const QPointF& p) {
     return QLineF(p, proj).length() < 5 + penWidth / 2;
 }
 
-
 // --- MyRect ---
 MyRect::MyRect(QRectF r, QColor p, QColor b, int w, Qt::PenStyle s)
     : MyShape(p, b, w, s) {
@@ -109,7 +106,6 @@ bool MyRect::contains(const QPointF& p) {
     QPointF p_local = inv_transform.map(p);
     return rect.contains(p_local);
 }
-
 
 // --- MyCircle ---
 MyCircle::MyCircle(qreal r, QColor p, QColor b, int w, Qt::PenStyle s)
@@ -142,7 +138,6 @@ bool MyCircle::contains(const QPointF& p) {
     return QLineF(QPointF(0, 0), p_local).length() <= radius;
 }
 
-
 // --- MyEllipse ---
 MyEllipse::MyEllipse(qreal rx, qreal ry, QColor p, QColor b, int w, Qt::PenStyle s)
     : MyShape(p, b, w, s), rx(rx), ry(ry) {
@@ -174,7 +169,6 @@ bool MyEllipse::contains(const QPointF& p) {
     if (rx == 0 || ry == 0) return false;
     return (p_local.x() * p_local.x()) / (rx * rx) + (p_local.y() * p_local.y()) / (ry * ry) <= 1.0;
 }
-
 
 // --- MyPolygon ---
 MyPolygon::MyPolygon(QVector<QPoint> p, QColor pen, QColor brush, int w, Qt::PenStyle s)
@@ -209,7 +203,6 @@ bool MyPolygon::contains(const QPointF& p) {
     QPointF p_local = inv_transform.map(p);
     return QPolygonF(points.toVector()).containsPoint(p_local, Qt::OddEvenFill);
 }
-
 
 // --- MyPath ---
 MyPath::MyPath(QVector<QPoint> p, QColor pen, int w, Qt::PenStyle s)
@@ -276,7 +269,6 @@ QRectF MyPath::getLocalBoundingBox() {
 // ===================================================================
 // --- 3. RasterWidget 构造/析构/初始化 ---
 // ===================================================================
-
 RasterWidget::RasterWidget(QWidget *parent)
     : QWidget(parent)
 {
@@ -309,9 +301,11 @@ void RasterWidget::resizeBuffer(const QSize &size)
     if (m_canvasBuffer.size() == size) return;
     QImage newCanvasBuffer(size, QImage::Format_ARGB32_Premultiplied);
     newCanvasBuffer.fill(Qt::white);
-    QPainter p_canvas(&newCanvasBuffer);
-    p_canvas.end();
     m_canvasBuffer = newCanvasBuffer;
+
+    // 同时调整预览缓冲
+    m_previewBuffer = QImage(size, QImage::Format_ARGB32_Premultiplied);
+    m_previewBuffer.fill(Qt::transparent);
     qInfo() << "Raster canvas resized to" << size;
 }
 
@@ -321,107 +315,151 @@ void RasterWidget::resizeEvent(QResizeEvent *event)
     redrawAllShapes();
 }
 
-
 // ===================================================================
 // --- 4. 核心绘图 (PaintEvent 和 Redraw) ---
 // ===================================================================
+void RasterWidget::drawPreview()
+{
+    // 清空预览缓冲
+    m_previewBuffer.fill(Qt::transparent);
+
+    if (!m_isDrawing || m_painterStatus == PainterStatus::SELECT) return;
+
+    // 创建临时QPainter用于绘制到预览缓冲
+    QPainter p(&m_previewBuffer);
+    p.setPen(QPen(m_penColor, m_penWidth, m_penStyle));
+    p.setBrush(m_brushColor.alpha() == 0 ? Qt::NoBrush : m_brushColor);
+
+    // 使用光栅化算法绘制预览
+    switch (m_painterStatus) {
+    case PainterStatus::LINE:
+        rasterDrawLine(m_startPoint.x(), m_startPoint.y(),
+                       m_currentPoint.x(), m_currentPoint.y(),
+                       m_penColor, m_penWidth, m_penStyle);
+        break;
+    case PainterStatus::RECT: {
+        QRect rect = QRect(m_startPoint, m_currentPoint).normalized();
+        MyRect tempRect(rect, m_penColor, m_brushColor, m_penWidth, m_penStyle);
+        tempRect.position = rect.center();
+        tempRect.recomputeTransform();
+        tempRect.draw(this);
+        break;
+    }
+    case PainterStatus::CIRCLE: {
+        QRectF rect = QRect(m_startPoint, m_currentPoint).normalized();
+        qreal r = std::max(rect.width(), rect.height()) / 2.0;
+        MyCircle tempCircle(r, m_penColor, m_brushColor, m_penWidth, m_penStyle);
+        tempCircle.position = rect.center();
+        tempCircle.recomputeTransform();
+        tempCircle.draw(this);
+        break;
+    }
+    case PainterStatus::ELLIPSE: {
+        QRectF rect = QRect(m_startPoint, m_currentPoint).normalized();
+        MyEllipse tempEllipse(rect.width()/2, rect.height()/2, m_penColor, m_brushColor, m_penWidth, m_penStyle);
+        tempEllipse.position = rect.center();
+        tempEllipse.recomputeTransform();
+        tempEllipse.draw(this);
+        break;
+    }
+    case PainterStatus::PEN:
+    case PainterStatus::POLYGON:
+        if (!m_tempPoints.isEmpty()) {
+            // 绘制临时路径
+            for (int i = 0; i < m_tempPoints.size() - 1; ++i) {
+                rasterDrawLine(m_tempPoints[i].x(), m_tempPoints[i].y(),
+                               m_tempPoints[i+1].x(), m_tempPoints[i+1].y(),
+                               m_penColor, m_penWidth, m_penStyle);
+            }
+            // 绘制到最后一个临时点
+            if (m_tempPoints.size() > 0) {
+                rasterDrawLine(m_tempPoints.last().x(), m_tempPoints.last().y(),
+                               m_currentPoint.x(), m_currentPoint.y(),
+                               m_penColor, m_penWidth, m_penStyle);
+            }
+        }
+        break;
+    default: break;
+    }
+
+    p.end();
+}
 
 void RasterWidget::redrawAllShapes()
 {
+    // 1. 清空主缓冲
     m_canvasBuffer.fill(Qt::white);
-    QPainter p(&m_canvasBuffer);
-    p.setRenderHint(QPainter::Antialiasing);
 
+    // 2. 绘制所有形状
     for (MyShape* shape : m_shapeList) {
         shape->draw(this);
     }
 
-    clearHandles();
+    // 3. 绘制选择框和控制点（使用光栅化）
     if (!m_selectedShapes.isEmpty()) {
-        p.setPen(QPen(Qt::blue, 1, Qt::DashLine));
-        p.setBrush(Qt::NoBrush);
-
         if (m_selectedShapes.count() == 1) {
             MyShape* shape = m_selectedShapes.first();
-
-            // 获取旋转后的多边形 (OBB)
             QPolygonF localRect(shape->getLocalBoundingBox());
             QPolygonF obb = shape->transform.map(localRect);
 
-            createHandles(obb);
-
-            // 绘制旋转后的边框
-            p.drawPolygon(obb);
+            // 绘制选择框边框（使用光栅化）
+            QVector<QPoint> borderPoints;
+            for (const QPointF& p : obb) {
+                borderPoints.append(p.toPoint());
+            }
+            // 闭合边框
+            if (!borderPoints.isEmpty()) {
+                borderPoints.append(borderPoints.first());
+            }
+            for (int i = 0; i < borderPoints.size() - 1; ++i) {
+                rasterDrawLine(borderPoints[i].x(), borderPoints[i].y(),
+                               borderPoints[i+1].x(), borderPoints[i+1].y(),
+                               Qt::blue, 1, Qt::DashLine);
+            }
 
             // 绘制控制点
-            p.setPen(Qt::black);
-            p.setBrush(Qt::white);
+            createHandles(obb);
             for (ControlHandle* h : m_handles) {
-                p.drawRect(h->getRect(obb));
+                QRectF handleRect = h->getRect(obb);
+                // 用填充和边框绘制小矩形
+                MyRect tempRect(handleRect.toRect(), Qt::black, Qt::white, 1, Qt::SolidLine);
+                tempRect.draw(this);
             }
 
-            // 绘制旋转手柄的连线
-            ControlHandle* rotH = m_handles.last(); // Rotate is last
-            ControlHandle* topH = m_handles[1];     // Top is index 1
+            // 绘制旋转手柄连线
+            ControlHandle* rotH = m_handles.last();
+            ControlHandle* topH = m_handles[1];
             if (rotH && topH) {
-                p.setPen(Qt::black);
-                p.drawLine(rotH->getRect(obb).center(), topH->getRect(obb).center());
+                QPointF p1 = rotH->getRect(obb).center();
+                QPointF p2 = topH->getRect(obb).center();
+                rasterDrawLine(p1.x(), p1.y(), p2.x(), p2.y(), Qt::black, 1, Qt::SolidLine);
             }
-
         } else {
-            // 多选时保持 AABB (简单处理)
+            // 多选时绘制简单边框
             for (MyShape* shape : m_selectedShapes) {
-                p.drawRect(shape->getBoundingBox());
+                QRectF bbox = shape->getBoundingBox();
+                MyRect tempRect(bbox, Qt::blue, Qt::transparent, 1, Qt::DashLine);
+                tempRect.position = bbox.center();
+                tempRect.recomputeTransform();
+                tempRect.draw(this);
             }
         }
     }
-    p.end();
+
     update();
 }
 
 void RasterWidget::paintEvent(QPaintEvent *event)
 {
+    Q_UNUSED(event);
     QPainter painter(this);
+
+    // 绘制主缓冲
     painter.drawImage(0, 0, m_canvasBuffer);
 
-    if (m_isDrawing && m_painterStatus == PainterStatus::SELECT) {
-        painter.setPen(QPen(Qt::blue, 1, Qt::DashLine));
-        painter.setBrush(QColor(0, 0, 100, 30));
-        painter.drawRect(QRect(m_startPoint, m_currentPoint).normalized());
-    }
-    else if (m_isDrawing && m_painterStatus != PainterStatus::SELECT) {
-        painter.setPen(QPen(m_penColor, m_penWidth, m_penStyle));
-        painter.setBrush(m_brushColor.alpha() == 0 ? Qt::NoBrush : m_brushColor);
-
-        switch (m_painterStatus) {
-        case PainterStatus::LINE:
-            painter.drawLine(m_startPoint, m_currentPoint);
-            break;
-        case PainterStatus::RECT:
-            painter.drawRect(QRect(m_startPoint, m_currentPoint).normalized());
-            break;
-        case PainterStatus::CIRCLE: {
-            QRectF rect = QRect(m_startPoint, m_currentPoint).normalized();
-            qreal r = std::max(rect.width(), rect.height()) / 2.0;
-            painter.drawEllipse(rect.center(), r, r);
-            break;
-        }
-        case PainterStatus::ELLIPSE:
-            painter.drawEllipse(QRect(m_startPoint, m_currentPoint).normalized());
-            break;
-        case PainterStatus::PEN: // (FALLTHROUGH)
-        case PainterStatus::POLYGON:
-            if (!m_tempPoints.isEmpty()) {
-                QPolygon poly = m_tempPoints;
-                poly.append(m_currentPoint);
-                painter.drawPolyline(poly);
-            }
-            break;
-        default: break;
-        }
-    }
+    // 绘制预览缓冲
+    painter.drawImage(0, 0, m_previewBuffer);
 }
-
 
 // ===================================================================
 // --- 5. 鼠标和键盘事件 ---
@@ -445,7 +483,6 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
     m_dragStartPosition = event->pos();
 
     if (m_painterStatus == PainterStatus::SELECT) {
-
         // 1. 检查控制点
         if (m_selectedShapes.count() == 1) {
             m_activeHandle = getHandleAt(event->pos());
@@ -540,7 +577,8 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
         update();
         break;
     case PainterStatus::FILLSELECT:
-        rasterFloodFill(event->pos().x(), event->pos().y(), m_brushColor);
+        if(m_colorType == ColorType::FILL)
+            rasterFloodFill(event->pos().x(), event->pos().y(), m_brushColor);
         break;
     default:
         break;
@@ -554,7 +592,6 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
     QPointF dragDelta = QPointF(m_currentPoint - m_dragStartPosition);
 
     if (m_isTransforming && m_painterStatus == PainterStatus::SELECT && !m_selectedShapes.isEmpty()) {
-
         // 1. 还原到原始分解参数
         for(MyShape* s : m_selectedShapes) {
             if (m_originalParams.contains(s)) {
@@ -576,27 +613,17 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
         case HandlePosition::Rotate: { // 旋转
             if (m_selectedShapes.count() != 1) break;
             MyShape* s = m_selectedShapes.first();
-
-            // 使用当前transform计算形状中心（因为已经还原到原始状态）
             QPointF shapeCenter = s->position;
-
-            // 计算角度
             qreal angle1 = QLineF(shapeCenter, m_dragStartPosition).angle();
             qreal angle2 = QLineF(shapeCenter, m_currentPoint).angle();
             qreal angleDiff = angle1 - angle2;
-
             s->rotation += angleDiff; // 累加旋转角度
             break;
         }
 
-        default: { // 缩放
+        default: { // 缩放 - 允许翻转
             if (m_selectedShapes.count() != 1) break;
             MyShape* s = m_selectedShapes.first();
-
-            // 获取形状的中心
-            QPointF shapeCenter = s->position;
-
-            // 计算鼠标在原始变换空间中的向量
             QTransform invTrans = m_originalParams[s].transform.inverted();
             QPointF localStart = invTrans.map(m_dragStartPosition);
             QPointF localCurr = invTrans.map(m_currentPoint);
@@ -612,11 +639,7 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
                 sy = localCurr.y() / localStart.y();
             }
 
-            // 限制最小缩放值，防止翻转或消失
-            sx = std::max(0.01, sx);
-            sy = std::max(0.01, sy);
-
-            // 应用缩放（直接设置，而不是累乘）
+            // 允许负缩放实现翻转
             s->scaleX = m_originalParams[s].scaleX * sx;
             s->scaleY = m_originalParams[s].scaleY * sy;
             break;
@@ -632,12 +655,12 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
-    if (m_isDrawing && m_painterStatus == PainterStatus::SELECT) { update(); return; }
+    // 更新预览
     if (m_isDrawing) {
-        if (m_painterStatus == PainterStatus::PEN) { m_tempPoints.append(event->pos()); update(); }
-        else if (m_painterStatus == PainterStatus::POLYGON) { update(); }
-        else { update(); }
+        drawPreview();
+        update();
     }
+
     if (m_painterStatus == PainterStatus::SELECT) {
         ControlHandle* h = getHandleAt(event->pos());
         if(h) setCursorForHandle(h->pos);
@@ -720,6 +743,7 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
         }
 
         if (newShape) {
+            m_previewBuffer.fill(Qt::transparent); // 清空预览
             redrawAllShapes();
         }
     }
@@ -814,24 +838,23 @@ void RasterWidget::clearCanvas()
     m_tempPoints.clear();
     m_isTransforming = false;
     m_canvasBuffer.fill(Qt::white);
+    m_previewBuffer.fill(Qt::transparent);
     update();
 }
 
 void RasterWidget::onSaveAs()
 {
     if(!isChosen) return;
-    QString fileName = QFileDialog::getSaveFileName(this, "保存为", "", "JSON 文件 (*.json);;PNG 图片 (*.png)");
+    QString fileName = QFileDialog::getSaveFileName(this, "保存为", "", "PNG 图片 (*.png)");
     if (fileName.isEmpty()) return;
 
     if (fileName.endsWith(".png")) {
-        QList<MyShape*> temp = m_selectedShapes;
-        m_selectedShapes.clear();
-        redrawAllShapes();
-        m_canvasBuffer.save(fileName);
-        m_selectedShapes = temp;
-        redrawAllShapes();
-    } else if (fileName.endsWith(".json")) {
-        qWarning() << "JSON save not implemented for RasterWidget yet.";
+        // 合并画布和预览
+        QImage finalImage = m_canvasBuffer.copy();
+        QPainter p(&finalImage);
+        p.drawImage(0, 0, m_previewBuffer);
+        p.end();
+        finalImage.save(fileName);
     }
 }
 
@@ -853,9 +876,8 @@ void RasterWidget::palatteButtonClicked()
 void RasterWidget::onOpen()
 {
     if(!isChosen) return;
-    qWarning() << "JSON open not implemented for RasterWidget yet.";
+    qWarning() << "打开功能未实现.";
 }
-
 
 // ===================================================================
 // --- 7. 变换/控制点 辅助函数 ---
@@ -884,7 +906,6 @@ ControlHandle* RasterWidget::getHandleAt(const QPoint& p) {
     if (m_selectedShapes.count() != 1) return nullptr;
 
     MyShape* s = m_selectedShapes.first();
-    // 获取旋转后的 OBB 多边形
     QPolygonF localPoly(s->getLocalBoundingBox());
     QPolygonF obb = s->transform.map(localPoly);
 
@@ -919,7 +940,6 @@ QRectF ControlHandle::getRect(const QPolygonF& obb) {
     const int SIZE = 10;
     QPointF center;
 
-    // obb[0]=TL, obb[1]=TR, obb[2]=BR, obb[3]=BL
     if (obb.count() < 4) return QRectF();
 
     QPointF tl = obb[0];
@@ -932,18 +952,13 @@ QRectF ControlHandle::getRect(const QPolygonF& obb) {
     case HandlePosition::TopRight:    center = tr; break;
     case HandlePosition::BottomRight: center = br; break;
     case HandlePosition::BottomLeft:  center = bl; break;
-
     case HandlePosition::Top:         center = (tl + tr) / 2.0; break;
     case HandlePosition::Right:       center = (tr + br) / 2.0; break;
     case HandlePosition::Bottom:      center = (bl + br) / 2.0; break;
     case HandlePosition::Left:        center = (bl + tl) / 2.0; break;
-
     case HandlePosition::Rotate: {
-        // 旋转手柄放在 Top 手柄上方 20px 处 (沿着局部Y轴方向)
         QPointF topMid = (tl + tr) / 2.0;
-        // 计算向上的向量 (利用 TopLeft -> BottomLeft 向量取反)
         QLineF upVec(bl, tl);
-        // 归一化并延伸
         if (upVec.length() > 0) {
             upVec.setLength(20);
             center = topMid + (upVec.p2() - upVec.p1());
@@ -953,7 +968,6 @@ QRectF ControlHandle::getRect(const QPolygonF& obb) {
         break;
     }
     case HandlePosition::Center:
-        // 平均值求中心
         center = (tl + tr + br + bl) / 4.0;
         break;
     }
@@ -975,15 +989,26 @@ void RasterWidget::setCursorForHandle(HandlePosition pos) {
     }
 }
 
-
 // ===================================================================
-// --- 8. 光栅化算法 (保持不变) ---
+// --- 8. 光栅化算法 (核心实现) ---
 // ===================================================================
 void RasterWidget::drawPixel(int x, int y, const QColor &color) {
     if (m_canvasBuffer.rect().contains(x, y)) {
         m_canvasBuffer.setPixelColor(x, y, color);
     }
 }
+
+void RasterWidget::drawPixelAA(int x, int y, qreal alpha, const QColor &color) {
+    if (!m_canvasBuffer.rect().contains(x, y)) return;
+
+    // 简单的alpha混合
+    QColor bg = m_canvasBuffer.pixelColor(x, y);
+    int r = bg.red() * (1-alpha) + color.red() * alpha;
+    int g = bg.green() * (1-alpha) + color.green() * alpha;
+    int b = bg.blue() * (1-alpha) + color.blue() * alpha;
+    m_canvasBuffer.setPixelColor(x, y, QColor(r, g, b, 255));
+}
+
 void RasterWidget::drawThickPixel(int x, int y, int width, const QColor &color) {
     int r = width / 2;
     for (int iy = -r; iy <= r; ++iy) {
@@ -993,7 +1018,20 @@ void RasterWidget::drawThickPixel(int x, int y, int width, const QColor &color) 
     }
 }
 
+// Bresenham直线算法
 void RasterWidget::rasterDrawLine(int x0, int y0, int x1, int y1, const QColor &color, int width, Qt::PenStyle style) {
+    // 根据算法选择
+    if (m_antialiasing) {
+        rasterDrawLineWu(x0, y0, x1, y1, color, width);
+        return;
+    }
+
+    if (m_lineAlgorithm == LineAlgorithm::DDA) {
+        rasterDrawLineDDA(x0, y0, x1, y1, color, width);
+        return;
+    }
+
+    // 默认Bresenham
     int dx = std::abs(x1 - x0);
     int dy = -std::abs(y1 - y0);
     int sx = (x0 < x1) ? 1 : -1;
@@ -1003,7 +1041,9 @@ void RasterWidget::rasterDrawLine(int x0, int y0, int x1, int y1, const QColor &
     int dashPattern = 0;
     int dashLength = 10;
     bool drawing = true;
+
     while (true) {
+        // 处理线型
         switch (style) {
         case Qt::SolidLine: drawing = true; break;
         case Qt::DashLine: drawing = (dashPattern / dashLength) % 2 == 0; break;
@@ -1017,6 +1057,7 @@ void RasterWidget::rasterDrawLine(int x0, int y0, int x1, int y1, const QColor &
         default: drawing = true; break;
         }
         dashPattern++;
+
         if (drawing) {
             drawThickPixel(x0, y0, width, color);
         }
@@ -1027,59 +1068,201 @@ void RasterWidget::rasterDrawLine(int x0, int y0, int x1, int y1, const QColor &
     }
 }
 
-void RasterWidget::rasterDrawCircle(int xc, int yc, int radius, const QColor &color, int width, Qt::PenStyle style) {
-    int x = radius; int y = 0; int p = 1 - radius;
-    drawThickPixel(xc + x, yc - y, width, color);
-    if (radius > 0) {
-        drawThickPixel(xc - x, yc + y, width, color);
-        drawThickPixel(xc + y, yc + x, width, color);
-        drawThickPixel(xc - y, yc - x, width, color);
+// DDA直线算法（第二种算法）
+void RasterWidget::rasterDrawLineDDA(int x0, int y0, int x1, int y1, const QColor &color, int width) {
+    double dx = x1 - x0;
+    double dy = y1 - y0;
+    double steps = std::max(std::abs(dx), std::abs(dy));
+
+    if (steps == 0) {
+        drawThickPixel(x0, y0, width, color);
+        return;
     }
-    while (x > y) {
-        y++;
-        if (p <= 0) { p = p + 2 * y + 1; }
-        else { x--; p = p + 2 * y - 2 * x + 1; }
-        if (x < y) break;
-        drawThickPixel(xc + x, yc - y, width, color);
-        drawThickPixel(xc - x, yc - y, width, color);
-        drawThickPixel(xc + x, yc + y, width, color);
-        drawThickPixel(xc - x, yc + y, width, color);
-        if (x != y) {
-            drawThickPixel(xc + y, yc - x, width, color);
-            drawThickPixel(xc - y, yc - x, width, color);
+
+    double xIncrement = dx / steps;
+    double yIncrement = dy / steps;
+    double x = x0;
+    double y = y0;
+
+    for (int i = 0; i <= steps; i++) {
+        drawThickPixel(round(x), round(y), width, color);
+        x += xIncrement;
+        y += yIncrement;
+    }
+}
+
+// Wu反走样直线算法（实现反走样）
+void RasterWidget::rasterDrawLineWu(int x0, int y0, int x1, int y1, const QColor &color, int width) {
+    // 简化版Wu算法，支持基本反走样
+    bool steep = abs(y1 - y0) > abs(x1 - x0);
+    if (steep) {
+        std::swap(x0, y0);
+        std::swap(x1, y1);
+    }
+    if (x0 > x1) {
+        std::swap(x0, x1);
+        std::swap(y0, y1);
+    }
+
+    double dx = x1 - x0;
+    double dy = y1 - y0;
+    double gradient = (dx == 0) ? 1.0 : dy / dx;
+
+    double xEnd = round(x0);
+    double yEnd = y0 + gradient * (xEnd - x0);
+    double xGap = 1 - (x0 + 0.5);
+    int xPixel1 = xEnd;
+    int yPixel1 = int(yEnd);
+
+    // 绘制端点
+    if (steep) {
+        drawPixelAA(yPixel1, xPixel1, (1 - (yEnd - floor(yEnd))) * xGap, color);
+        drawPixelAA(yPixel1 + 1, xPixel1, (yEnd - floor(yEnd)) * xGap, color);
+    } else {
+        drawPixelAA(xPixel1, yPixel1, (1 - (yEnd - floor(yEnd))) * xGap, color);
+        drawPixelAA(xPixel1, yPixel1 + 1, (yEnd - floor(yEnd)) * xGap, color);
+    }
+
+    double intery = yEnd + gradient;
+    xEnd = round(x1);
+    yEnd = y1 + gradient * (xEnd - x1);
+    xGap = (x1 + 0.5) - xEnd;
+    int xPixel2 = xEnd;
+    int yPixel2 = int(yEnd);
+
+    if (steep) {
+        drawPixelAA(yPixel2, xPixel2, (1 - (yEnd - floor(yEnd))) * xGap, color);
+        drawPixelAA(yPixel2 + 1, xPixel2, (yEnd - floor(yEnd)) * xGap, color);
+    } else {
+        drawPixelAA(xPixel2, yPixel2, (1 - (yEnd - floor(yEnd))) * xGap, color);
+        drawPixelAA(xPixel2, yPixel2 + 1, (yEnd - floor(yEnd)) * xGap, color);
+    }
+
+    // 主循环
+    for (int x = xPixel1 + 1; x <= xPixel2 - 1; ++x) {
+        if (steep) {
+            drawPixelAA(int(intery), x, 1 - (intery - floor(intery)), color);
+            drawPixelAA(int(intery) + 1, x, intery - floor(intery), color);
+        } else {
+            drawPixelAA(x, int(intery), 1 - (intery - floor(intery)), color);
+            drawPixelAA(x, int(intery) + 1, intery - floor(intery), color);
+        }
+        intery += gradient;
+    }
+}
+
+// 圆形绘制（根据算法选择）
+void RasterWidget::rasterDrawCircle(int xc, int yc, int radius, const QColor &color, int width, Qt::PenStyle style) {
+    if (m_circleAlgorithm == CircleAlgorithm::Bresenham) {
+        rasterDrawCircleBresenham(xc, yc, radius, color, width);
+    } else {
+        // 中点圆算法（默认）
+        int x = radius; int y = 0; int p = 1 - radius;
+        auto drawCirclePoints = [&](int x, int y) {
+            drawThickPixel(xc + x, yc + y, width, color);
+            drawThickPixel(xc - x, yc + y, width, color);
+            drawThickPixel(xc + x, yc - y, width, color);
+            drawThickPixel(xc - x, yc - y, width, color);
             drawThickPixel(xc + y, yc + x, width, color);
             drawThickPixel(xc - y, yc + x, width, color);
+            drawThickPixel(xc + y, yc - x, width, color);
+            drawThickPixel(xc - y, yc - x, width, color);
+        };
+
+        drawCirclePoints(x, y);
+        if (radius > 0) {
+            drawThickPixel(xc, yc + radius, width, color);
+            drawThickPixel(xc, yc - radius, width, color);
+        }
+
+        while (x > y) {
+            y++;
+            if (p <= 0) { p = p + 2 * y + 1; }
+            else { x--; p = p + 2 * y - 2 * x + 1; }
+            if (x < y) break;
+            drawCirclePoints(x, y);
         }
     }
 }
 
+// Bresenham圆算法（第二种）
+void RasterWidget::rasterDrawCircleBresenham(int xc, int yc, int radius, const QColor &color, int width) {
+    int x = 0;
+    int y = radius;
+    int d = 3 - 2 * radius;
+
+    auto drawCirclePoints = [&](int x, int y) {
+        drawThickPixel(xc + x, yc + y, width, color);
+        drawThickPixel(xc - x, yc + y, width, color);
+        drawThickPixel(xc + x, yc - y, width, color);
+        drawThickPixel(xc - x, yc - y, width, color);
+        drawThickPixel(xc + y, yc + x, width, color);
+        drawThickPixel(xc - y, yc + x, width, color);
+        drawThickPixel(xc + y, yc - x, width, color);
+        drawThickPixel(xc - y, yc - x, width, color);
+    };
+
+    while (x <= y) {
+        drawCirclePoints(x, y);
+        if (d < 0) {
+            d = d + 4 * x + 6;
+        } else {
+            d = d + 4 * (x - y) + 10;
+            y--;
+        }
+        x++;
+    }
+}
+
+// 椭圆绘制（根据算法选择）
 void RasterWidget::rasterDrawEllipse(int xc, int yc, int rx, int ry, const QColor &color, int width, Qt::PenStyle style) {
+    if (m_ellipseAlgorithm == EllipseAlgorithm::DDA) {
+        rasterDrawEllipseDDA(xc, yc, rx, ry, color, width);
+        return;
+    }
+
+    // 中点椭圆算法（默认）
     long rx2 = (long)rx * rx; long ry2 = (long)ry * ry;
     long twoRx2 = 2 * rx2; long twoRy2 = 2 * ry2;
     int x = 0; int y = ry;
     long p = (long)std::round(ry2 - rx2 * ry + 0.25 * rx2);
     long px = 0; long py = twoRx2 * y;
-    while (px < py) {
+
+    auto drawEllipsePoints = [&](int x, int y) {
         drawThickPixel(xc + x, yc + y, width, color);
         drawThickPixel(xc - x, yc + y, width, color);
         drawThickPixel(xc + x, yc - y, width, color);
         drawThickPixel(xc - x, yc - y, width, color);
+    };
+
+    while (px < py) {
+        drawEllipsePoints(x, y);
         x++; px += twoRy2;
         if (p < 0) { p += ry2 + px; }
         else { y--; py -= twoRx2; p += ry2 + px - py; }
     }
+
     p = (long)std::round(ry2 * (x + 0.5) * (x + 0.5) + rx2 * (y - 1) * (y - 1) - rx2 * ry2);
     while (y >= 0) {
-        drawThickPixel(xc + x, yc + y, width, color);
-        drawThickPixel(xc - x, yc + y, width, color);
-        drawThickPixel(xc + x, yc - y, width, color);
-        drawThickPixel(xc - x, yc - y, width, color);
+        drawEllipsePoints(x, y);
         y--; py -= twoRx2;
         if (p > 0) { p += rx2 - py; }
         else { x++; px += twoRy2; p += rx2 - py + px; }
     }
 }
 
+// DDA椭圆算法（第二种）
+void RasterWidget::rasterDrawEllipseDDA(int xc, int yc, int rx, int ry, const QColor &color, int width) {
+    int segments = std::max(36, (int)((rx + ry) / 4));
+    for (int i = 0; i < segments; ++i) {
+        qreal angle = 2.0 * PI * i / (qreal)segments;
+        int x = round(xc + rx * cos(angle));
+        int y = round(yc + ry * sin(angle));
+        drawThickPixel(x, y, width, color);
+    }
+}
+
+// 扫描线填充多边形
 void RasterWidget::rasterScanFillPolygon(const QVector<QPoint> &points, const QColor &fillColor, const QColor &borderColor, int width, Qt::PenStyle style) {
     if (points.size() < 3) return;
     int yMin = points[0].y(); int yMax = points[0].y();
@@ -1134,6 +1317,8 @@ void RasterWidget::rasterScanFillPolygon(const QVector<QPoint> &points, const QC
         }
         for (Edge &e : AET) { e.x += e.dx; }
     }
+
+    // 绘制边界（第二种算法：使用直线绘制边界）
     if (borderColor.alpha() != 0 && width > 0) {
         for (int i = 0; i < points.size(); ++i) {
             const QPoint &p1 = points[i];

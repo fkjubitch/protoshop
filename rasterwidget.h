@@ -34,9 +34,13 @@ public:
     QRectF getRect(const QPolygonF& obb);
 };
 
-
 // --- 2. 形状基类 ---
 enum class ShapeType { Line, Rect, Circle, Ellipse, Polygon, Path };
+
+// 算法选择枚举
+enum class LineAlgorithm { Bresenham, DDA };
+enum class CircleAlgorithm { Midpoint, Bresenham };
+enum class EllipseAlgorithm { Midpoint, DDA };
 
 // 变换参数结构体，用于备份
 struct TransformParams {
@@ -55,7 +59,7 @@ public:
     Qt::PenStyle penStyle = Qt::SolidLine;
     QTransform transform;
 
-    // 新增：分解的变换参数
+    // 分解的变换参数
     QPointF position = QPointF(0, 0);  // 平移（中心点位置）
     qreal rotation = 0.0;              // 旋转角度（度）
     qreal scaleX = 1.0;                // X 缩放
@@ -87,7 +91,6 @@ public:
 };
 
 // --- 3. 形状子类 (声明不变) ---
-
 class MyLine : public MyShape {
 public:
     QPointF p1, p2;
@@ -154,9 +157,7 @@ public:
     ShapeType getType() override { return ShapeType::Path; }
 };
 
-
 // --- 4. RasterWidget 主类 ---
-
 class RasterWidget : public QWidget
 {
     Q_OBJECT
@@ -172,6 +173,10 @@ public slots:
     void setColorType(const ColorType type);
     void setPenWidth(int width);
     void setPenStyle(Qt::PenStyle style);
+    void setLineAlgorithm(LineAlgorithm alg) { m_lineAlgorithm = alg; }
+    void setCircleAlgorithm(CircleAlgorithm alg) { m_circleAlgorithm = alg; }
+    void setEllipseAlgorithm(EllipseAlgorithm alg) { m_ellipseAlgorithm = alg; }
+    void setAntialiasing(bool enabled) { m_antialiasing = enabled; }
     void clearCanvas();
     void onOpen();
     void onSaveAs();
@@ -188,18 +193,24 @@ protected:
 public:
     // 光栅化算法
     void rasterDrawLine(int x0, int y0, int x1, int y1, const QColor &color, int width, Qt::PenStyle style);
+    void rasterDrawLineDDA(int x0, int y0, int x1, int y1, const QColor &color, int width);
+    void rasterDrawLineWu(int x0, int y0, int x1, int y1, const QColor &color, int width);
     void rasterDrawCircle(int xc, int yc, int radius, const QColor &color, int width, Qt::PenStyle style);
+    void rasterDrawCircleBresenham(int xc, int yc, int radius, const QColor &color, int width);
     void rasterDrawEllipse(int xc, int yc, int rx, int ry, const QColor &color, int width, Qt::PenStyle style);
+    void rasterDrawEllipseDDA(int xc, int yc, int rx, int ry, const QColor &color, int width);
     void rasterScanFillPolygon(const QVector<QPoint> &points, const QColor &fillColor, const QColor &borderColor, int width, Qt::PenStyle style);
     void rasterFloodFill(int x, int y, const QColor &fillColor);
 
 private:
     // --- 内部辅助函数 ---
     void drawPixel(int x, int y, const QColor &color);
+    void drawPixelAA(int x, int y, qreal alpha, const QColor &color);
     void drawThickPixel(int x, int y, int width, const QColor &color);
     void resizeBuffer(const QSize &size);
     void redrawAllShapes();
     void deleteSelectedShapes();
+    void drawPreview(); // 绘制预览到缓冲
 
     // 变换相关
     MyShape* getShapeAt(const QPoint& p);
@@ -208,9 +219,11 @@ private:
     void clearHandles();
     void setCursorForHandle(HandlePosition pos);
     QRectF getSelectedShapesBoundingBox();
+    void drawHandles(); // 使用光栅化绘制控制点
 
 private:
     QImage m_canvasBuffer;
+    QImage m_previewBuffer; // 预览缓冲，减少闪烁
 
     // --- 状态 ---
     PainterStatus m_painterStatus = PainterStatus::SELECT;
@@ -220,7 +233,13 @@ private:
     int m_penWidth = 1;
     Qt::PenStyle m_penStyle = Qt::SolidLine;
 
-    // --- “实时”绘图的状态 ---
+    // 算法选择
+    LineAlgorithm m_lineAlgorithm = LineAlgorithm::Bresenham;
+    CircleAlgorithm m_circleAlgorithm = CircleAlgorithm::Midpoint;
+    EllipseAlgorithm m_ellipseAlgorithm = EllipseAlgorithm::Midpoint;
+    bool m_antialiasing = false;
+
+    // --- "实时"绘图的状态 ---
     bool m_isDrawing = false;
     QPoint m_startPoint;
     QPoint m_currentPoint;
