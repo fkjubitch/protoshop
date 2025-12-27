@@ -2071,6 +2071,40 @@ static QJsonObject shapeToJson(MyShape* shape)
 
     // 根据类型存储特定数据
     switch(shape->getType()) {
+    case ShapeType::BezierCurve: {
+        MyBezierCurve* curve = static_cast<MyBezierCurve*>(shape);
+        obj["type"] = "MyBezierCurve";
+        QJsonArray pts;
+        for (const QPointF &p : curve->ctrl)
+            pts.append(QJsonArray{p.x(), p.y()});
+        obj["controlPoints"] = pts;
+        break;
+    }
+    case ShapeType::BSplineCurve: {
+        MyBSplineCurve* sc = static_cast<MyBSplineCurve*>(shape);
+        obj["type"] = "MyBSplineCurve";
+        QJsonArray pts;
+        for (const QPointF &p : sc->ctrl)
+            pts.append(QJsonArray{p.x(), p.y()});
+        obj["controlPoints"] = pts;
+        obj["degree"] = sc->degree;
+        break;
+    }
+    case ShapeType::BezierSurface: {
+        MyBezierSurface* surf = static_cast<MyBezierSurface*>(shape);
+        obj["type"] = "MyBezierSurface";
+        QJsonArray grid;
+        for (const QVector<QPointF> &row : surf->ctrl) {
+            QJsonArray r;
+            for (const QPointF &p : row)
+                r.append(QJsonArray{p.x(), p.y()});
+            grid.append(r);
+        }
+        obj["controlGrid"] = grid;
+        obj["showWire"] = surf->showWire;
+        obj["showFill"] = surf->showFill;
+        break;
+    }
     case ShapeType::Line: {
         MyLine* line = static_cast<MyLine*>(shape);
         obj["type"] = "MyLine";
@@ -2167,6 +2201,43 @@ static MyShape* jsonToShape(const QJsonObject& obj)
             points.append(QPoint(pArr[0].toDouble(), pArr[1].toDouble()));
         }
         shape = new MyPath(points, penColor, penWidth, penStyle);
+    } else if (type == "MyBezierCurve") {
+        QJsonArray pts = obj["controlPoints"].toArray();
+        QVector<QPoint> ctrl;
+        for (const QJsonValue &v : pts) {
+            QJsonArray p = v.toArray();
+            ctrl.append(QPoint(p[0].toDouble(), p[1].toDouble()));
+        }
+        shape = new MyBezierCurve(ctrl, penColor, penWidth, penStyle);
+    } else if (type == "MyBSplineCurve") {
+        QJsonArray pts = obj["controlPoints"].toArray();
+        QVector<QPoint> ctrl;
+        for (const QJsonValue &v : pts) {
+            QJsonArray p = v.toArray();
+            ctrl.append(QPoint(p[0].toDouble(), p[1].toDouble()));
+        }
+        shape = new MyBSplineCurve(ctrl, penColor, penWidth, penStyle);
+        if (obj.contains("degree")) {
+            if (auto bs = dynamic_cast<MyBSplineCurve*>(shape))
+                bs->degree = obj["degree"].toInt();
+        }
+    } else if (type == "MyBezierSurface") {
+        QJsonArray grid = obj["controlGrid"].toArray();
+        QVector<QVector<QPoint>> ctrl;
+        for (const QJsonValue &rv : grid) {
+            QJsonArray row = rv.toArray();
+            QVector<QPoint> r;
+            for (const QJsonValue &pv : row) {
+                QJsonArray p = pv.toArray();
+                r.append(QPoint(p[0].toDouble(), p[1].toDouble()));
+            }
+            ctrl.append(r);
+        }
+        shape = new MyBezierSurface(ctrl, penColor, brushColor, penWidth, penStyle);
+        if (auto sf = dynamic_cast<MyBezierSurface*>(shape)) {
+            if (obj.contains("showWire")) sf->showWire = obj["showWire"].toBool();
+            if (obj.contains("showFill")) sf->showFill = obj["showFill"].toBool();
+        }
     }
 
     if (shape) {

@@ -622,8 +622,13 @@ void CustomView::onOpen()
 void CustomView::saveSceneState()
 {
     QJsonArray state;
-    for (QGraphicsItem *it : scene()->items())
+    for (QGraphicsItem *it : scene()->items()) {
+        // 跳过有 parentItem 的子项（例如曲线/曲面的控制点），只序列化顶层项
+        if (it->parentItem() != nullptr){
+            continue;
+        }
         state.append(itemToJson(it));
+    }
 
     undoStack.push(state);
     if (undoStack.size() > maxUndoSteps)

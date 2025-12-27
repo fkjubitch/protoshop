@@ -4,6 +4,7 @@
 #include "transformableellipseitem.h"
 #include "transformablepolygonitem.h"
 #include "transformablepathitem.h"
+#include "parametriccurves.h"
 
 static QJsonArray pathToArray(const QPainterPath &p)
 {
@@ -42,6 +43,9 @@ inline QString itemType(QGraphicsItem *it)
     if (qgraphicsitem_cast<TransformableRectItem*>(it))     return "TransformableRectItem";
     if (qgraphicsitem_cast<TransformableEllipseItem*>(it))  return "TransformableEllipseItem";
     if (qgraphicsitem_cast<TransformablePolygonItem*>(it))  return "TransformablePolygonItem";
+    if (qgraphicsitem_cast<BezierCurveItem*>(it))           return "BezierCurveItem";
+    if (qgraphicsitem_cast<BSplineCurveItem*>(it))          return "BSplineCurveItem";
+    if (qgraphicsitem_cast<BezierSurfaceItem*>(it))         return "BezierSurfaceItem";
     return "Unknown";
 }
 
@@ -86,6 +90,25 @@ QJsonObject itemToJson(QGraphicsItem *item)
         obj["points"] = pts;
     } else if (auto *pa = qgraphicsitem_cast<TransformablePathItem*>(item)) {
         obj["path"] = pathToArray(pa->path());   // QPainterPath 自带字符串序列化
+    } else if (auto *b = qgraphicsitem_cast<BezierCurveItem*>(item)) {
+        QJsonArray pts;
+        for (const QPointF &pt : b->controlPoints())
+            pts.append(QJsonArray{pt.x(), pt.y()});
+        obj["controlPoints"] = pts;
+    } else if (auto *s = qgraphicsitem_cast<BSplineCurveItem*>(item)) {
+        QJsonArray pts;
+        for (const QPointF &pt : s->controlPoints())
+            pts.append(QJsonArray{pt.x(), pt.y()});
+        obj["controlPoints"] = pts;
+    } else if (auto *sf = qgraphicsitem_cast<BezierSurfaceItem*>(item)) {
+        QJsonArray grid;
+        for (const QVector<QPointF> &row : sf->controlGrid()) {
+            QJsonArray r;
+            for (const QPointF &pt : row)
+                r.append(QJsonArray{pt.x(), pt.y()});
+            grid.append(r);
+        }
+        obj["controlGrid"] = grid;
     }
     return obj;
 }
@@ -151,5 +174,42 @@ void jsonToItem(const QJsonObject &o, QGraphicsScene *scene)
         applyCommon(pa);
         pa->setPen(QPen(pa->penColor, pa->penWidth, pa->penStyle));
         scene->addItem(pa);
+    } else if (type == "BezierCurveItem") {
+        QJsonArray pts = o["controlPoints"].toArray();
+        QVector<QPointF> ctrl;
+        for (const QJsonValue &v : pts) {
+            QJsonArray p = v.toArray();
+            ctrl << QPointF(p[0].toDouble(), p[1].toDouble());
+        }
+        auto *b = new BezierCurveItem(ctrl);
+        applyCommon(b);
+        scene->addItem(b);
+    } else if (type == "BSplineCurveItem") {
+        QJsonArray pts = o["controlPoints"].toArray();
+        QVector<QPointF> ctrl;
+        for (const QJsonValue &v : pts) {
+            QJsonArray p = v.toArray();
+            ctrl << QPointF(p[0].toDouble(), p[1].toDouble());
+        }
+        auto *s = new BSplineCurveItem(ctrl);
+        applyCommon(s);
+        scene->addItem(s);
+    } else if (type == "BezierSurfaceItem") {
+        QJsonArray grid = o["controlGrid"].toArray();
+        QVector<QVector<QPointF>> ctrl;
+        for (const QJsonValue &rv : grid) {
+            QJsonArray row = rv.toArray();
+            QVector<QPointF> r;
+            for (const QJsonValue &pv : row) {
+                QJsonArray p = pv.toArray();
+                r << QPointF(p[0].toDouble(), p[1].toDouble());
+            }
+            ctrl << r;
+        }
+        auto *sf = new BezierSurfaceItem(ctrl);
+        applyCommon(sf);
+        if (o.contains("showWire")) sf->setShowWireMesh(o["showWire"].toBool());
+        if (o.contains("showFill")) sf->setShowFill(o["showFill"].toBool());
+        scene->addItem(sf);
     }
 }
