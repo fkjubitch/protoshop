@@ -246,6 +246,224 @@ bool MyPath::contains(const QPointF& p) {
     return false;
 }
 
+// ----------------- MyBezierCurve 实现 -----------------
+MyBezierCurve::MyBezierCurve(const QVector<QPoint>& controlPoints, QColor pen, int w, Qt::PenStyle s)
+    : MyShape(pen, Qt::transparent, w, s)
+{
+    QPointF center(0,0);
+    if (!controlPoints.isEmpty()){
+        for (const QPoint &pt: controlPoints) center += pt;
+        center /= controlPoints.size();
+    }
+    position = center;
+    for (const QPoint &pt: controlPoints) ctrl.append(QPointF(pt) - center);
+    recomputeTransform();
+}
+
+static QPointF deCasteljau(const QVector<QPointF>& pts, double t) {
+    if (pts.isEmpty()) return QPointF();
+    QVector<QPointF> tmp = pts;
+    int n = tmp.size();
+    for (int r = 1; r < n; ++r) {
+        for (int i = 0; i < n - r; ++i) {
+            tmp[i] = tmp[i] * (1.0 - t) + tmp[i+1] * t;
+        }
+    }
+    return tmp[0];
+}
+
+void MyBezierCurve::draw(RasterWidget* widget) {
+    if (ctrl.size() < 2) return;
+    QPolygonF local;
+    for (const QPointF &p: ctrl) local << p;
+    QPolygonF transformed = transform.map(local);
+    int steps = 120;
+    QPointF prev = transform.map(ctrl.first());
+    for (int i = 1; i <= steps; ++i) {
+        double t = double(i)/steps;
+        QPointF pt = transform.map(deCasteljau(ctrl, t));
+        widget->rasterDrawLine(round(prev.x()), round(prev.y()), round(pt.x()), round(pt.y()), penColor, penWidth, penStyle);
+        prev = pt;
+    }
+}
+
+bool MyBezierCurve::contains(const QPointF& p) {
+    return getBoundingBox().contains(p);
+}
+
+QRectF MyBezierCurve::getBoundingBox() {
+    if (ctrl.isEmpty()) return QRectF();
+    QPolygonF poly;
+    for (const QPointF &c: ctrl) poly << transform.map(c);
+    return poly.boundingRect();
+}
+
+QRectF MyBezierCurve::getLocalBoundingBox() { QPolygonF poly; for (auto &c: ctrl) poly << c; return poly.boundingRect(); }
+
+// ----------------- MyBSplineCurve 实现 -----------------
+MyBSplineCurve::MyBSplineCurve(const QVector<QPoint>& controlPoints, QColor pen, int w, Qt::PenStyle s)
+    : MyShape(pen, Qt::transparent, w, s)
+{
+    QPointF center(0,0);
+    if (!controlPoints.isEmpty()){
+        for (const QPoint &pt: controlPoints) center += pt;
+        center /= controlPoints.size();
+    }
+    position = center;
+    for (const QPoint &pt: controlPoints) ctrl.append(QPointF(pt) - center);
+    recomputeTransform();
+    generateUniformKnots();
+}
+
+void MyBSplineCurve::generateUniformKnots() {
+    int n = ctrl.size();
+    int m = n + degree + 1;
+    knots.clear();
+    knots.resize(m);
+    for (int i = 0; i < m; ++i) knots[i] = 0.0;
+    for (int i = 0; i < m; ++i) {
+        if (i <= degree) knots[i] = 0.0;
+        else if (i >= n) knots[i] = double(n - degree);
+        else knots[i] = double(i - degree);
+    }
+}
+
+double MyBSplineCurve::basisFunction(int i, int k, double t) const {
+    // 非递归保护递归实现（小规模 degree 合适）
+    if (k == 0) {
+        if (i < 0 || i+1 >= knots.size()) return 0.0;
+        if (knots[i] < knots[i+1]) {
+            if (t >= knots[i] && t < knots[i+1]) return 1.0;
+            int last = knots.size()-1;
+            if (i+1 == last && std::fabs(t - knots[i+1]) < (PRECISION*10)) return 1.0;
+        }
+        return 0.0;
+    }
+    double denom1 = knots[i+k] - knots[i];
+    double denom2 = knots[i+k+1] - knots[i+1];
+    double left = 0.0, right = 0.0;
+    if (denom1 > PRECISION) left = (t - knots[i]) / denom1 * basisFunction(i, k-1, t);
+    if (denom2 > PRECISION) right = (knots[i+k+1] - t) / denom2 * basisFunction(i+1, k-1, t);
+    return left + right;
+}
+
+QPointF MyBSplineCurve::curvePoint(double t) const {
+    QPointF p(0,0);
+    int n = ctrl.size();
+    for (int i = 0; i < n; ++i) {
+        double b = basisFunction(i, degree, t);
+        p += ctrl[i] * b;
+    }
+    return p;
+}
+
+void MyBSplineCurve::draw(RasterWidget* widget) {
+    if (ctrl.size() < 2) return;
+    double t_start = knots[degree];
+    double t_end = knots[ctrl.size()];
+    int steps = 120;
+    QPointF prev = transform.map(curvePoint(t_start));
+    for (int i = 1; i < steps; ++i) {
+        double t = t_start + (t_end - t_start) * double(i) / steps;
+        QPointF pt = transform.map(curvePoint(t));
+        widget->rasterDrawLine(round(prev.x()), round(prev.y()), round(pt.x()), round(pt.y()), penColor, penWidth, penStyle);
+        prev = pt;
+    }
+}
+
+bool MyBSplineCurve::contains(const QPointF& p) { return getBoundingBox().contains(p); }
+QRectF MyBSplineCurve::getBoundingBox() { QPolygonF poly; for (auto &c: ctrl) poly << transform.map(c); return poly.boundingRect(); }
+QRectF MyBSplineCurve::getLocalBoundingBox() { QPolygonF poly; for (auto &c: ctrl) poly << c; return poly.boundingRect(); }
+
+// ----------------- MyBezierSurface 实现 -----------------
+MyBezierSurface::MyBezierSurface(const QVector<QVector<QPoint>>& grid, QColor pen, QColor brush, int w, Qt::PenStyle s)
+    : MyShape(pen, brush, w, s)
+{
+    // center by average of points
+    QPointF center(0,0); int cnt = 0;
+    for (int i = 0; i < grid.size(); ++i) for (int j = 0; j < grid[i].size(); ++j) { center += grid[i][j]; cnt++; }
+    if (cnt) center /= cnt;
+    position = center;
+    for (int i = 0; i < grid.size(); ++i) {
+        QVector<QPointF> row;
+        for (int j = 0; j < grid[i].size(); ++j) row.append(QPointF(grid[i][j]) - center);
+        ctrl.append(row);
+    }
+    recomputeTransform();
+}
+
+double MyBezierSurface::bernstein(int i, int n, double t) const {
+    if (i < 0 || i > n) return 0.0;
+    double coeff = 1.0;
+    for (int j = 0; j < i; ++j) coeff *= double(n - j) / double(j + 1);
+    return coeff * std::pow(1.0 - t, n - i) * std::pow(t, i);
+}
+
+QPointF MyBezierSurface::surfacePoint(double u, double v) const {
+    QPointF p(0,0);
+    int nu = ctrl.size(); if (nu == 0) return p;
+    int nv = ctrl[0].size();
+    for (int i = 0; i < nu; ++i) for (int j = 0; j < nv; ++j) {
+        double Bu = bernstein(i, nu-1, u);
+        double Bv = bernstein(j, nv-1, v);
+        p += ctrl[i][j] * (Bu * Bv);
+    }
+    return p;
+}
+
+void MyBezierSurface::draw(RasterWidget* widget) {
+    if (ctrl.isEmpty()) return;
+    int uSteps = 30, vSteps = 30;
+    // build vertex grid
+    QVector<QVector<QPoint>> verts(uSteps+1, QVector<QPoint>(vSteps+1));
+    for (int iu = 0; iu <= uSteps; ++iu) {
+        double u = double(iu) / uSteps;
+        for (int iv = 0; iv <= vSteps; ++iv) {
+            double v = double(iv) / vSteps;
+            QPointF sp = transform.map(surfacePoint(u, v));
+            verts[iu][iv] = QPoint(round(sp.x()), round(sp.y()));
+        }
+    }
+    // fill triangles (scanline) per quad
+    for (int i = 0; i < uSteps; ++i) {
+        for (int j = 0; j < vSteps; ++j) {
+            // triangle 1
+            QVector<QPoint> tri1 = { verts[i][j], verts[i+1][j], verts[i][j+1] };
+            if (showFill) {
+                QColor c1(static_cast<int>(255 * (1.0 - static_cast<double>(i) / uSteps)),
+                          static_cast<int>(255 * (1.0 - static_cast<double>(j) / vSteps)), 150);
+                widget->rasterScanFillPolygon(tri1, c1, Qt::transparent, 0, penStyle);
+            }
+            if (showWire) {
+                widget->rasterDrawLine(tri1[0].x(), tri1[0].y(), tri1[1].x(), tri1[1].y(), penColor, penWidth, penStyle);
+                widget->rasterDrawLine(tri1[1].x(), tri1[1].y(), tri1[2].x(), tri1[2].y(), penColor, penWidth, penStyle);
+                widget->rasterDrawLine(tri1[2].x(), tri1[2].y(), tri1[0].x(), tri1[0].y(), penColor, penWidth, penStyle);
+            }
+            // triangle 2
+            QVector<QPoint> tri2 = { verts[i+1][j], verts[i+1][j+1], verts[i][j+1] };
+            if (showFill) {
+                QColor c2(static_cast<int>(255 * (1.0 - static_cast<double>(i) / uSteps)),
+                          static_cast<int>(255 * (1.0 - static_cast<double>(j) / vSteps)), 150);
+                widget->rasterScanFillPolygon(tri2, c2, Qt::transparent, 0, penStyle);
+            }
+            if (showWire) {
+                widget->rasterDrawLine(tri2[0].x(), tri2[0].y(), tri2[1].x(), tri2[1].y(), penColor, penWidth, penStyle);
+                widget->rasterDrawLine(tri2[1].x(), tri2[1].y(), tri2[2].x(), tri2[2].y(), penColor, penWidth, penStyle);
+                widget->rasterDrawLine(tri2[2].x(), tri2[2].y(), tri2[0].x(), tri2[0].y(), penColor, penWidth, penStyle);
+            }
+        }
+    }
+}
+
+bool MyBezierSurface::contains(const QPointF& p) { return getBoundingBox().contains(p); }
+QRectF MyBezierSurface::getBoundingBox() {
+    QPolygonF poly;
+    for (auto &row: ctrl) for (auto &c: row) poly << transform.map(c);
+    return poly.boundingRect();
+}
+QRectF MyBezierSurface::getLocalBoundingBox() { QPolygonF poly; for (auto &row: ctrl) for (auto &c: row) poly << c; return poly.boundingRect(); }
+
+
 // getLocalBoundingBox
 QRectF MyLine::getLocalBoundingBox() {
     return QRectF(p1, p2).normalized();
@@ -421,6 +639,17 @@ void RasterWidget::redrawAllShapes()
             QPolygonF localRect(shape->getLocalBoundingBox());
             QPolygonF obb = shape->transform.map(localRect);
 
+            // 对于曲线/曲面，将选择矩形在屏幕空间放大，避免控制点与缩放把手重合
+            bool isCurveOrSurface = dynamic_cast<MyBezierCurve*>(shape) || dynamic_cast<MyBSplineCurve*>(shape) || dynamic_cast<MyBezierSurface*>(shape);
+            if (isCurveOrSurface) {
+                QRectF bbox = obb.boundingRect();
+                const int pad = 12; // 扩展像素量，确保把手不与控制点重合
+                bbox = bbox.adjusted(-pad, -pad, pad, pad);
+                QPolygonF expanded;
+                expanded << bbox.topLeft() << bbox.topRight() << bbox.bottomRight() << bbox.bottomLeft();
+                obb = expanded;
+            }
+
             // 绘制选择框边框（使用光栅化）
             QVector<QPoint> borderPoints;
             for (const QPointF& p : obb) {
@@ -452,6 +681,46 @@ void RasterWidget::redrawAllShapes()
                 QPointF p1 = rotH->getRect(obb).center();
                 QPointF p2 = topH->getRect(obb).center();
                 rasterDrawLine(p1.x(), p1.y(), p2.x(), p2.y(), Qt::black, 1, Qt::SolidLine);
+            }
+
+            // 如果选中的是曲线或曲面，绘制控制点（只在选中时显示）
+            MyShape* sel = m_selectedShapes.first();
+            if (sel) {
+                // 贝塞尔曲线
+                if (auto *bc = dynamic_cast<MyBezierCurve*>(sel)) {
+                    for (const QPointF &c : bc->ctrl) {
+                        QPointF sp = bc->transform.map(c);
+                        int cx = int(std::round(sp.x()));
+                        int cy = int(std::round(sp.y()));
+                            // 圆形控制点：黑色外环 + 白色内核（更大）
+                            drawFilledCircle(cx, cy, 5, Qt::black);
+                            drawFilledCircle(cx, cy, 3, Qt::white);
+                    }
+                }
+                // B样条曲线
+                else if (auto *bs = dynamic_cast<MyBSplineCurve*>(sel)) {
+                    for (const QPointF &c : bs->ctrl) {
+                        QPointF sp = bs->transform.map(c);
+                        int cx = int(std::round(sp.x()));
+                        int cy = int(std::round(sp.y()));
+                        // 圆形控制点：黑色外环 + 白色内核（更大）
+                        drawFilledCircle(cx, cy, 5, Qt::black);
+                        drawFilledCircle(cx, cy, 3, Qt::white);
+                    }
+                }
+                // Bézier 曲面
+                else if (auto *bsf = dynamic_cast<MyBezierSurface*>(sel)) {
+                    for (const auto &row : bsf->ctrl) {
+                        for (const QPointF &c : row) {
+                            QPointF sp = bsf->transform.map(c);
+                            int cx = int(std::round(sp.x()));
+                            int cy = int(std::round(sp.y()));
+                            // 圆形控制点：黑色外环 + 白色内核（更大）
+                            drawFilledCircle(cx, cy, 5, Qt::black);
+                            drawFilledCircle(cx, cy, 3, Qt::white);
+                        }
+                    }
+                }
             }
         } else {
             // 多选时绘制简单边框
@@ -599,6 +868,16 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
             return;
         }
 
+        // 尝试拾取曲线/曲面控制点以开始拖拽
+        if (m_selectedShapes.count() == 1) {
+            if (tryPickCurveControl(event->pos())) {
+                m_isMovingCurveControl = true;
+                m_dragStartPosition = event->pos();
+                setCursor(Qt::ClosedHandCursor);
+                return;
+            }
+        }
+
         MyShape* shape = getShapeAt(event->pos());
         if (shape) {
             m_isTransforming = true;
@@ -651,6 +930,14 @@ void RasterWidget::mousePressEvent(QMouseEvent *event)
         m_isDrawing = true;
         m_tempPoints.clear();
         m_tempPoints.append(event->pos());
+        break;
+    case PainterStatus::CURVE:
+    case PainterStatus::BSPLINE:
+    case PainterStatus::SURFACE:
+        // 记录起点，释放时创建具体 shape
+        m_isDrawing = true;
+        m_startPoint = event->pos();
+        m_currentPoint = event->pos();
         break;
     case PainterStatus::LINE:
     case PainterStatus::RECT:
@@ -755,6 +1042,34 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
         return;
     }
 
+    // 如果正在拖拽曲线/曲面的控制点，更新对应控制点坐标并重绘
+    if (m_isMovingCurveControl && m_activeCurveControl.shape) {
+        MyShape* s = m_activeCurveControl.shape;
+        QTransform inv = s->transform.inverted();
+        QPointF local = inv.map(event->pos());
+        if (!m_activeCurveControl.isSurface) {
+            if (auto *bc = dynamic_cast<MyBezierCurve*>(s)) {
+                if (m_activeCurveControl.i >=0 && m_activeCurveControl.i < bc->ctrl.size()) {
+                    bc->ctrl[m_activeCurveControl.i] = local;
+                }
+            } else if (auto *bs = dynamic_cast<MyBSplineCurve*>(s)) {
+                if (m_activeCurveControl.i >=0 && m_activeCurveControl.i < bs->ctrl.size()) {
+                    bs->ctrl[m_activeCurveControl.i] = local;
+                }
+            }
+        } else {
+            if (auto *sf = dynamic_cast<MyBezierSurface*>(s)) {
+                int i = m_activeCurveControl.i;
+                int j = m_activeCurveControl.j;
+                if (i>=0 && i<sf->ctrl.size() && j>=0 && j<sf->ctrl[i].size()) {
+                    sf->ctrl[i][j] = local;
+                }
+            }
+        }
+        redrawAllShapes();
+        return;
+    }
+
     if (m_isDrawing && m_painterStatus == PainterStatus::PEN) {
         m_tempPoints.append(event->pos());
         drawPreview();
@@ -769,10 +1084,15 @@ void RasterWidget::mouseMoveEvent(QMouseEvent *event)
     }
 
     if (m_painterStatus == PainterStatus::SELECT) {
-        ControlHandle* h = getHandleAt(event->pos());
-        if(h) setCursorForHandle(h->pos);
-        else if (getShapeAt(event->pos())) setCursor(Qt::SizeAllCursor);
-        else setCursor(Qt::ArrowCursor);
+        // 如果悬停在曲线/曲面控制点上，显示手形光标
+        if (isOverCurveControl(event->pos())) {
+            setCursor(Qt::PointingHandCursor);
+        } else {
+            ControlHandle* h = getHandleAt(event->pos());
+            if(h) setCursorForHandle(h->pos);
+            else if (getShapeAt(event->pos())) setCursor(Qt::SizeAllCursor);
+            else setCursor(Qt::ArrowCursor);
+        }
     } else {
         setCursor(Qt::CrossCursor);
     }
@@ -844,6 +1164,43 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
         }
         case PainterStatus::POLYGON:
             break;
+        case PainterStatus::CURVE: {
+            // 创建 4 控制点三次贝塞尔（与 CustomView 保持一致的默认布局）
+            QVector<QPoint> ctrl = {
+                m_startPoint,
+                m_startPoint + QPoint(50, -50),
+                m_startPoint + QPoint(100, 50),
+                m_startPoint + QPoint(150, 0)
+            };
+            newShape = new MyBezierCurve(ctrl, m_penColor, m_penWidth, m_penStyle);
+            break;
+        }
+        case PainterStatus::BSPLINE: {
+            QVector<QPoint> ctrl = {
+                m_startPoint,
+                m_startPoint + QPoint(40, -60),
+                m_startPoint + QPoint(100, -50),
+                m_startPoint + QPoint(150, 20),
+                m_startPoint + QPoint(170, 80)
+            };
+            newShape = new MyBSplineCurve(ctrl, m_penColor, m_penWidth, m_penStyle);
+            break;
+        }
+        case PainterStatus::SURFACE: {
+            // 4x4 控制网格
+            QVector<QVector<QPoint>> grid(4, QVector<QPoint>(4));
+            for (int i = 0; i < 4; ++i) for (int j = 0; j < 4; ++j) {
+                grid[i][j] = m_startPoint + QPoint(i * 60, j * 60) + QPoint(0, (i + j) * 20);
+            }
+            // 强制曲面使用与笔色相关且不可由用户更改的填充色
+            QColor fill = m_penColor;
+            fill.setAlpha(200);
+            newShape = new MyBezierSurface(grid, m_penColor, fill, m_penWidth, m_penStyle);
+            if (auto *sf = dynamic_cast<MyBezierSurface*>(newShape)) {
+                sf->showFill = true;
+            }
+            break;
+        }
         default: break;
         }
 
@@ -854,6 +1211,13 @@ void RasterWidget::mouseReleaseEvent(QMouseEvent *event)
 
             m_previewBuffer.fill(Qt::transparent); // 清空预览
         }
+    }
+
+    // 如果刚刚结束的是控制点拖拽，保存状态并结束拖拽
+    if (m_isMovingCurveControl) {
+        m_isMovingCurveControl = false;
+        m_activeCurveControl = CurveControlPick();
+        saveSceneState();
     }
 
     if (m_needsAntialiasing) {
@@ -922,6 +1286,8 @@ void RasterWidget::setPenColor(const QColor &color)
 void RasterWidget::setBrushColor(const QColor &color) {
     m_brushColor = color;
     for (MyShape* s : m_selectedShapes) {
+        // 曲面的填充不允许用户修改
+        if (dynamic_cast<MyBezierSurface*>(s)) continue;
         s->brushColor = color;
     }
     if(!m_selectedShapes.isEmpty()) {
@@ -937,6 +1303,8 @@ void RasterWidget::setColorType(const ColorType type) {
 void RasterWidget::setPenWidth(int width) {
     m_penWidth = width;
     for (MyShape* s : m_selectedShapes) {
+        // 不允许修改曲面的线宽
+        if (dynamic_cast<MyBezierSurface*>(s)) continue;
         s->penWidth = width;
     }
     if(!m_selectedShapes.isEmpty()) {
@@ -998,6 +1366,103 @@ MyShape* RasterWidget::getShapeAt(const QPoint& p) {
     return nullptr;
 }
 
+// 尝试在当前被选中的单个 shape 上拾取控制点（曲线或曲面）
+bool RasterWidget::tryPickCurveControl(const QPoint &p)
+{
+    if (m_selectedShapes.count() != 1) return false;
+    MyShape* sel = m_selectedShapes.first();
+    // 贝塞尔曲线
+    if (auto *bc = dynamic_cast<MyBezierCurve*>(sel)) {
+        int r = 10; // 控制点拾取半径像素（加大以匹配更大的可视控制点）
+        for (int idx = 0; idx < bc->ctrl.size(); ++idx) {
+            QPointF sp = bc->transform.map(bc->ctrl[idx]);
+            int dx = int(std::round(sp.x())) - p.x();
+            int dy = int(std::round(sp.y())) - p.y();
+            if (dx*dx + dy*dy <= r*r) {
+                m_activeCurveControl.shape = bc;
+                m_activeCurveControl.i = idx;
+                m_activeCurveControl.j = -1;
+                m_activeCurveControl.isSurface = false;
+                return true;
+            }
+        }
+        return false;
+    }
+    // B-spline
+    if (auto *bs = dynamic_cast<MyBSplineCurve*>(sel)) {
+        int r = 10;
+        for (int idx = 0; idx < bs->ctrl.size(); ++idx) {
+            QPointF sp = bs->transform.map(bs->ctrl[idx]);
+            int dx = int(std::round(sp.x())) - p.x();
+            int dy = int(std::round(sp.y())) - p.y();
+            if (dx*dx + dy*dy <= r*r) {
+                m_activeCurveControl.shape = bs;
+                m_activeCurveControl.i = idx;
+                m_activeCurveControl.j = -1;
+                m_activeCurveControl.isSurface = false;
+                return true;
+            }
+        }
+        return false;
+    }
+    // Bézier 曲面
+    if (auto *s = dynamic_cast<MyBezierSurface*>(sel)) {
+        int r = 10;
+        for (int i = 0; i < s->ctrl.size(); ++i) {
+            for (int j = 0; j < s->ctrl[i].size(); ++j) {
+                QPointF sp = s->transform.map(s->ctrl[i][j]);
+                int dx = int(std::round(sp.x())) - p.x();
+                int dy = int(std::round(sp.y())) - p.y();
+                if (dx*dx + dy*dy <= r*r) {
+                    m_activeCurveControl.shape = s;
+                    m_activeCurveControl.i = i;
+                    m_activeCurveControl.j = j;
+                    m_activeCurveControl.isSurface = true;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    return false;
+}
+
+bool RasterWidget::isOverCurveControl(const QPoint &p) const {
+    if (m_selectedShapes.count() != 1) return false;
+    MyShape* sel = m_selectedShapes.first();
+    int r = 10;
+    if (auto *bc = dynamic_cast<MyBezierCurve*>(sel)) {
+        for (int idx = 0; idx < bc->ctrl.size(); ++idx) {
+            QPointF sp = bc->transform.map(bc->ctrl[idx]);
+            int dx = int(std::round(sp.x())) - p.x();
+            int dy = int(std::round(sp.y())) - p.y();
+            if (dx*dx + dy*dy <= r*r) return true;
+        }
+        return false;
+    }
+    if (auto *bs = dynamic_cast<MyBSplineCurve*>(sel)) {
+        for (int idx = 0; idx < bs->ctrl.size(); ++idx) {
+            QPointF sp = bs->transform.map(bs->ctrl[idx]);
+            int dx = int(std::round(sp.x())) - p.x();
+            int dy = int(std::round(sp.y())) - p.y();
+            if (dx*dx + dy*dy <= r*r) return true;
+        }
+        return false;
+    }
+    if (auto *s = dynamic_cast<MyBezierSurface*>(sel)) {
+        for (int i = 0; i < s->ctrl.size(); ++i) {
+            for (int j = 0; j < s->ctrl[i].size(); ++j) {
+                QPointF sp = s->transform.map(s->ctrl[i][j]);
+                int dx = int(std::round(sp.x())) - p.x();
+                int dy = int(std::round(sp.y())) - p.y();
+                if (dx*dx + dy*dy <= r*r) return true;
+            }
+        }
+        return false;
+    }
+    return false;
+}
+
 QRectF RasterWidget::getSelectedShapesBoundingBox() {
     if (m_selectedShapes.isEmpty()) return QRectF();
     if (m_selectedShapes.count() == 1) return m_selectedShapes.first()->getBoundingBox();
@@ -1015,6 +1480,17 @@ ControlHandle* RasterWidget::getHandleAt(const QPoint& p) {
     MyShape* s = m_selectedShapes.first();
     QPolygonF localPoly(s->getLocalBoundingBox());
     QPolygonF obb = s->transform.map(localPoly);
+
+    // 如果当前是曲线或曲面，使用与 redrawAllShapes 中相同的扩展逻辑
+    bool isCurveOrSurface = dynamic_cast<MyBezierCurve*>(s) || dynamic_cast<MyBSplineCurve*>(s) || dynamic_cast<MyBezierSurface*>(s);
+    if (isCurveOrSurface) {
+        QRectF bbox = obb.boundingRect();
+        const int pad = 12; // 与 redrawAllShapes 中的 pad 保持一致
+        bbox = bbox.adjusted(-pad, -pad, pad, pad);
+        QPolygonF expanded;
+        expanded << bbox.topLeft() << bbox.topRight() << bbox.bottomRight() << bbox.bottomLeft();
+        obb = expanded;
+    }
 
     for (ControlHandle* h : m_handles) {
         if (h->getRect(obb).contains(p)) {
@@ -1134,6 +1610,19 @@ void RasterWidget::drawThickPixel(int x, int y, int width, const QColor &color) 
     for (int iy = -r; iy <= r; ++iy) {
         for (int ix = -r; ix <= r; ++ix) {
             drawPixel(x + ix, y + iy, color);
+        }
+    }
+}
+
+// 绘制实心圆（像素级填充）
+void RasterWidget::drawFilledCircle(int cx, int cy, int radius, const QColor &color) {
+    if (radius <= 0) { drawPixel(cx, cy, color); return; }
+    for (int dy = -radius; dy <= radius; ++dy) {
+        int h = radius*radius - dy*dy;
+        if (h < 0) continue;
+        int dxmax = int(std::floor(std::sqrt((double)h)));
+        for (int dx = -dxmax; dx <= dxmax; ++dx) {
+            drawPixel(cx + dx, cy + dy, color);
         }
     }
 }

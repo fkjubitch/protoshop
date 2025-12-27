@@ -37,9 +37,11 @@ private:
     QMenu* m_lineAlgorithmMenu = nullptr;    // 直线算法菜单
     QMenu* m_circleAlgorithmMenu = nullptr;  // 圆形算法菜单
     QMenu* m_ellipseAlgorithmMenu = nullptr; // 椭圆算法菜单
+    QMenu* m_curveMenu = nullptr;             // 曲线子菜单（贝塞尔 / B样条）
 
     void createRasterAlgorithmMenus();  // 创建光栅算法菜单
     void removeRasterAlgorithmMenus();  // 移除光栅算法菜单
+    void createCurveMenu();
     void handleToolButtonCheck(QPushButton* button, PainterStatus status);
 
 private slots:
@@ -96,6 +98,10 @@ private slots:
     void onCircleAlgorithmTriggered(QAction* action);
     void onEllipseAlgorithmTriggered(QAction* action);
 
+    void on_curveButton_clicked();
+
+    void on_curveSurfaceButton_clicked();
+
 private:
     QButtonGroup* sideBarButtonGroup = nullptr;
     QButtonGroup* colorTypeButtonGroup = nullptr; // 着色类型按钮组
@@ -105,6 +111,30 @@ private:
     QActionGroup* lineTypeActionGroup = nullptr;
     QActionGroup* implMethodActionGroup = nullptr; // 实现方式选择组
     QGraphicsScene* m_scene = nullptr;
+
+    // 子菜单样式
+    QString menuStyle = R"(
+    QMenu {
+        background-color: rgb(101, 102, 104);  /* 菜单背景色，与按钮一致 */
+        border: 1px solid rgb(80, 80, 80);
+    }
+    QMenu::item {
+        color: white;              /* 正常状态文字颜色 */
+        padding: 5px 20px 5px 20px;
+        background-color: transparent;
+    }
+    QMenu::item:selected {         /* 鼠标悬停/选中状态 */
+        background-color: rgb(120, 120, 120);
+        color: white;
+    }
+    QMenu::item:disabled {         /* 禁用状态 */
+        color: rgb(160, 160, 160);
+    }
+    QMenu::separator {             /* 分隔线 */
+        height: 1px;
+        background-color: rgb(80, 80, 80);
+    }
+)";
 
 public:
     Ui::MainWindow *ui;

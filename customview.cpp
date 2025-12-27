@@ -162,6 +162,72 @@ void CustomView::mousePressEvent(QMouseEvent *event)
             }
             break;
         }
+        case PainterStatus::CURVE:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_startPoint = mapToScene(event->pos());
+                QVector<QPointF> ctrl = {
+                    m_startPoint,
+                    m_startPoint + QPointF(50, -50),
+                    m_startPoint + QPointF(100, 50),
+                    m_startPoint + QPointF(150, 0)
+                };
+                m_currentCurveItem = new BezierCurveItem(ctrl);
+                m_currentCurveItem->penColor = penColor;
+                m_currentCurveItem->penWidth = penWidth;
+                m_currentCurveItem->brushColor = brushColor;
+                m_currentCurveItem->penStyle = penStyle;
+                scene()->addItem(m_currentCurveItem);
+            } else {
+                QGraphicsView::mousePressEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::BSPLINE:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_startPoint = mapToScene(event->pos());
+                QVector<QPointF> ctrl = {
+                    m_startPoint,
+                    m_startPoint + QPointF(40, -60),
+                    m_startPoint + QPointF(100, -50),
+                    m_startPoint + QPointF(150, 20),
+                    m_startPoint + QPointF(170, 80)
+                };
+                m_currentBSplineItem = new BSplineCurveItem(ctrl);
+                m_currentBSplineItem->penColor = penColor;
+                m_currentBSplineItem->penWidth = penWidth;
+                m_currentBSplineItem->brushColor = brushColor;
+                m_currentBSplineItem->penStyle = penStyle;
+                scene()->addItem(m_currentBSplineItem);
+            } else {
+                QGraphicsView::mousePressEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::SURFACE:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_startPoint = mapToScene(event->pos());
+                // 生成 4x4 默认控制网格
+                QVector<QVector<QPointF>> grid(4, QVector<QPointF>(4));
+                for (int i = 0; i < 4; ++i) {
+                    for (int j = 0; j < 4; ++j) {
+                        grid[i][j] = m_startPoint + QPointF(i * 60, j * 60) + QPointF(0, (i + j) * 20);
+                    }
+                }
+                m_currentSurfaceItem = new BezierSurfaceItem(grid);
+                m_currentSurfaceItem->penColor = penColor;
+                m_currentSurfaceItem->penWidth = penWidth;
+                m_currentSurfaceItem->brushColor = brushColor;
+                m_currentSurfaceItem->setShowWireMesh(true);
+                m_currentSurfaceItem->setShowFill(true);
+                scene()->addItem(m_currentSurfaceItem);
+            } else {
+                QGraphicsView::mousePressEvent(event);
+            }
+            break;
+        }
         case PainterStatus::FILLSELECT:
         {
             if (event->button() == Qt::LeftButton) {
@@ -219,7 +285,7 @@ void CustomView::mouseMoveEvent(QMouseEvent *event)
         }
         ItemCommon * itemCommon = dynamic_cast<ItemCommon*>(item);
 
-        if (itemCommon->isRotateHandle || itemCommon->isRotateHandling) {
+        if (itemCommon && (itemCommon->isRotateHandle || itemCommon->isRotateHandling)) {
             isRotateCursor = true;
         }
     }
@@ -412,6 +478,36 @@ void CustomView::mouseReleaseEvent(QMouseEvent *event)
                     delete m_currentEllipseItem;
                 }
                 m_currentEllipseItem = nullptr;
+            } else {
+                QGraphicsView::mouseReleaseEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::CURVE:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_currentCurveItem = nullptr;
+                saveSceneState();
+            } else {
+                QGraphicsView::mouseReleaseEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::BSPLINE:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_currentBSplineItem = nullptr;
+                saveSceneState();
+            } else {
+                QGraphicsView::mouseReleaseEvent(event);
+            }
+            break;
+        }
+        case PainterStatus::SURFACE:
+        {
+            if (event->button() == Qt::LeftButton) {
+                m_currentSurfaceItem = nullptr;
+                saveSceneState();
             } else {
                 QGraphicsView::mouseReleaseEvent(event);
             }

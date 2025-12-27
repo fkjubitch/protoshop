@@ -39,7 +39,7 @@ public:
 };
 
 // --- 2. 形状基类 ---
-enum class ShapeType { Line, Rect, Circle, Ellipse, Polygon, Path };
+enum class ShapeType { Line, Rect, Circle, Ellipse, Polygon, Path, BezierCurve, BSplineCurve, BezierSurface };
 
 // 算法选择枚举
 enum class LineAlgorithm { Bresenham, DDA };
@@ -161,6 +161,51 @@ public:
     ShapeType getType() override { return ShapeType::Path; }
 };
 
+// --- 新增：曲线与曲面（光栅化实现） ---
+class MyBezierCurve : public MyShape {
+public:
+    QVector<QPointF> ctrl;
+    MyBezierCurve(const QVector<QPoint>& controlPoints, QColor pen, int w, Qt::PenStyle s);
+    void draw(RasterWidget* widget) override;
+    bool contains(const QPointF& p) override;
+    QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
+    ShapeType getType() override { return ShapeType::BezierCurve; }
+};
+
+class MyBSplineCurve : public MyShape {
+public:
+    QVector<QPointF> ctrl;
+    int degree = 3;
+    QVector<double> knots;
+    MyBSplineCurve(const QVector<QPoint>& controlPoints, QColor pen, int w, Qt::PenStyle s);
+    void draw(RasterWidget* widget) override;
+    bool contains(const QPointF& p) override;
+    QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
+    ShapeType getType() override { return ShapeType::BSplineCurve; }
+private:
+    void generateUniformKnots();
+    double basisFunction(int i, int k, double t) const;
+    QPointF curvePoint(double t) const;
+};
+
+class MyBezierSurface : public MyShape {
+public:
+    QVector<QVector<QPointF>> ctrl; // grid
+    bool showWire = true;
+    bool showFill = true;
+    MyBezierSurface(const QVector<QVector<QPoint>>& grid, QColor pen, QColor brush, int w, Qt::PenStyle s);
+    void draw(RasterWidget* widget) override;
+    bool contains(const QPointF& p) override;
+    QRectF getBoundingBox() override;
+    QRectF getLocalBoundingBox() override;
+    ShapeType getType() override { return ShapeType::BezierSurface; }
+private:
+    double bernstein(int i, int n, double t) const;
+    QPointF surfacePoint(double u, double v) const;
+};
+
 // --- 4. RasterWidget 主类 ---
 class RasterWidget : public QWidget
 {
@@ -233,6 +278,15 @@ private:
     QRectF getSelectedShapesBoundingBox();
     void drawHandles(); // 使用光栅化绘制控制点
 
+    // 辅助：绘制实心圆（用于控制点）
+    void drawFilledCircle(int cx, int cy, int radius, const QColor &color);
+
+    // 尝试拾取曲线/曲面的控制点（在单个选中时）
+    bool tryPickCurveControl(const QPoint &p);
+
+    // 仅用于悬停检测，不修改状态
+    bool isOverCurveControl(const QPoint &p) const;
+
     void saveSceneState();   // 保存当前场景状态
     void restoreSceneState(const QByteArray &state); // 恢复场景状态
 
@@ -270,6 +324,16 @@ private:
     QList<MyShape*> m_selectedShapes;
     QList<ControlHandle*> m_handles;
     ControlHandle* m_activeHandle = nullptr;
+
+    // 曲线/曲面控制点拖拽支持
+    struct CurveControlPick {
+        MyShape* shape = nullptr;
+        int i = -1; // for curve index or surface row
+        int j = -1; // for surface col, -1 for 1D curves
+        bool isSurface = false;
+    };
+    CurveControlPick m_activeCurveControl;
+    bool m_isMovingCurveControl = false;
 
     HandlePosition m_currentOpHandlePos = HandlePosition::Center;
     bool m_isTransforming = false;

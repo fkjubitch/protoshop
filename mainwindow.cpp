@@ -20,7 +20,9 @@ MainWindow::MainWindow(QWidget *parent)
     sideBarButtonGroup->addButton(ui->polygonButton, 5);
     sideBarButtonGroup->addButton(ui->circleButton, 6);
     sideBarButtonGroup->addButton(ui->ellipseButton, 7);
-    sideBarButtonGroup->addButton(ui->fillSelectButton, 8);
+    sideBarButtonGroup->addButton(ui->curveButton, 8);
+    sideBarButtonGroup->addButton(ui->curveSurfaceButton, 9);
+    sideBarButtonGroup->addButton(ui->fillSelectButton, 10);
     sideBarButtonGroup->setExclusive(true);
     ui->selectButton->setChecked(true); // 默认选择画笔
 
@@ -46,6 +48,9 @@ MainWindow::MainWindow(QWidget *parent)
     painterActionGroup->addAction(ui->polygonAction);
     painterActionGroup->addAction(ui->circleAction);
     painterActionGroup->addAction(ui->ellipseAction);
+    painterActionGroup->addAction(ui->curveAction);
+    painterActionGroup->addAction(ui->curveSurfaceAction);
+    painterActionGroup->addAction(ui->fillSelectAction);
     painterActionGroup->setExclusive(true);
     ui->rectSelectAction->setChecked(true);
 
@@ -85,7 +90,6 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->openAction, &QAction::triggered, ui->graphicsView, &CustomView::onOpen);
     connect(ui->revokeAction, &QAction::triggered, ui->graphicsView, &CustomView::onRevoke);
     connect(ui->undoAction, &QAction::triggered, ui->graphicsView, &CustomView::onUndo);
-    // raster TODO
     connect(ui->rasterWidget, &RasterWidget::sendMousePos, this, &MainWindow::receiveMousePos);
     connect(ui->palatteButton, &QPushButton::clicked, ui->rasterWidget, &RasterWidget::palatteButtonClicked);
     connect(ui->delete_action, &QAction::triggered, ui->rasterWidget, &RasterWidget::onDeleteActionClicked);
@@ -101,6 +105,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->polygonAction, &QAction::triggered, ui->polygonButton, &QPushButton::click);
     connect(ui->circleAction, &QAction::triggered, ui->circleButton, &QPushButton::click);
     connect(ui->ellipseAction, &QAction::triggered, ui->ellipseButton, &QPushButton::click);
+    connect(ui->curveAction, &QAction::triggered, ui->curveButton, &QPushButton::click);
+    connect(ui->curveSurfaceAction, &QAction::triggered, ui->curveSurfaceButton, &QPushButton::click);
     connect(ui->fillSelectAction, &QAction::triggered, ui->fillSelectButton, &QPushButton::click);
     connect(ui->boardColorAction, &QAction::triggered, ui->boardButton, &QPushButton::click);
     connect(ui->fillColorAction, &QAction::triggered, ui->fillButton, &QPushButton::click);
@@ -121,10 +127,35 @@ MainWindow::MainWindow(QWidget *parent)
     // 开启反采样（抗锯齿），具体实现详见rasterwidget.cpp
     ui->rasterWidget->setAntialiasing(true);
 
-    // 隐藏QPushButton在添加菜单后右侧小三角，防止其占位导致贴图偏左
-    ui->lineButton->setStyleSheet("QPushButton { background-color: rgb(101, 102, 104);} QPushButton::menu-indicator {image: none;width: 0px;}");
-    ui->circleButton->setStyleSheet("QPushButton { background-color: rgb(101, 102, 104);} QPushButton::menu-indicator {image: none;width: 0px;}");
-    ui->ellipseButton->setStyleSheet("QPushButton { background-color: rgb(101, 102, 104);} QPushButton::menu-indicator {image: none;width: 0px;}");
+    // 按钮的样式
+    for (auto button: sideBarButtonGroup->buttons()){
+        button->setStyleSheet(
+            "QPushButton { background: rgb(101, 102, 104); }"
+            "QPushButton::menu-indicator {image: none;width: 0px;}"  // 隐藏QPushButton在添加菜单后右侧小三角，防止其占位导致贴图偏左
+            "QPushButton:hover { background: rgb(177, 179, 182); }"
+            "QPushButton:pressed { background: #ccc; }"
+            "QPushButton:checked { background: rgb(61, 132, 238);}"
+        );
+    }
+    for (auto button: colorTypeButtonGroup->buttons()){
+        button->setStyleSheet(
+            "QPushButton { background: rgb(101, 102, 104); border: }"
+            "QPushButton:hover { background: rgb(177, 179, 182); }"
+            "QPushButton:pressed { background: #ccc; }"
+            "QPushButton:checked { background: rgb(61, 132, 238);}"
+            );
+    }
+    for (auto button: lineTypeButtonGroup->buttons()){
+        button->setStyleSheet(
+            "QPushButton { background: rgb(101, 102, 104); border: }"
+            "QPushButton:hover { background: rgb(177, 179, 182); }"
+            "QPushButton:pressed { background: #ccc; }"
+            "QPushButton:checked { background: rgb(61, 132, 238);}"
+            );
+    }
+
+    // 创建曲线子菜单
+    createCurveMenu();
 }
 
 MainWindow::~MainWindow()
@@ -133,30 +164,37 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+void MainWindow::createCurveMenu()
+{
+    // 曲线子菜单（包含三次贝塞尔与 B 样条）
+    m_curveMenu = new QMenu("曲线类型", this);
+    m_curveMenu->setStyleSheet(menuStyle);
+    QAction* curveBezier = m_curveMenu->addAction(QStringLiteral("三次贝塞尔曲线"));
+    QAction* curveBSpline = m_curveMenu->addAction(QStringLiteral("三次B样条曲线"));
+    curveBezier->setCheckable(true);
+    curveBSpline->setCheckable(true);
+    curveBezier->setChecked(true); // 默认三次贝塞尔
+    ui->curveButton->setMenu(m_curveMenu);
+
+    connect(m_curveMenu, &QMenu::triggered, this, [this](QAction* action){
+        // 更新子菜单选中状态
+        for (QAction* a : m_curveMenu->actions()) a->setChecked(a == action);
+        if (action->text() == QStringLiteral("三次贝塞尔曲线")) {
+            ui->graphicsView->setPainterStatus(PainterStatus::CURVE);
+            ui->rasterWidget->setPainterStatus(PainterStatus::CURVE);
+            ui->curveButton->setChecked(true);
+            ui->curveAction->setChecked(true);
+        } else {
+            ui->graphicsView->setPainterStatus(PainterStatus::BSPLINE);
+            ui->rasterWidget->setPainterStatus(PainterStatus::BSPLINE);
+            ui->curveButton->setChecked(true);
+            ui->curveAction->setChecked(true);
+        }
+    });
+}
+
 void MainWindow::createRasterAlgorithmMenus()
 {
-    QString menuStyle = R"(
-    QMenu {
-        background-color: rgb(101, 102, 104);  /* 菜单背景色，与按钮一致 */
-        border: 1px solid rgb(80, 80, 80);
-    }
-    QMenu::item {
-        color: white;              /* 正常状态文字颜色 */
-        padding: 5px 20px 5px 20px;
-        background-color: transparent;
-    }
-    QMenu::item:selected {         /* 鼠标悬停/选中状态 */
-        background-color: rgb(120, 120, 120);
-        color: white;
-    }
-    QMenu::item:disabled {         /* 禁用状态 */
-        color: rgb(160, 160, 160);
-    }
-    QMenu::separator {             /* 分隔线 */
-        height: 1px;
-        background-color: rgb(80, 80, 80);
-    }
-)";
     // 直线算法菜单
     m_lineAlgorithmMenu = new QMenu("直线算法", this);
     m_lineAlgorithmMenu->setStyleSheet(menuStyle);
@@ -316,6 +354,28 @@ void MainWindow::on_ellipseButton_clicked(bool checked)
 }
 
 
+void MainWindow::on_curveButton_clicked()
+{
+    if(ui->curveButton->isChecked())
+    {
+        ui->graphicsView->setPainterStatus(PainterStatus::CURVE);
+        ui->rasterWidget->setPainterStatus(PainterStatus::CURVE);
+        ui->curveAction->setChecked(true);
+    }
+}
+
+
+void MainWindow::on_curveSurfaceButton_clicked()
+{
+    if(ui->curveSurfaceButton->isChecked())
+    {
+        ui->graphicsView->setPainterStatus(PainterStatus::SURFACE);
+        ui->rasterWidget->setPainterStatus(PainterStatus::SURFACE);
+        ui->curveSurfaceAction->setChecked(true);
+    }
+}
+
+
 void MainWindow::on_selectButton_clicked()
 {
     if (ui->selectButton->isChecked())
@@ -405,6 +465,7 @@ void MainWindow::on_fillButton_clicked()
         ui->fillColorAction->setChecked(true);
     }
 }
+
 
 void MainWindow::onHelpTriggered()
 {
@@ -554,7 +615,25 @@ void MainWindow::onWidthAction()
 
     if (dlg.exec() == QDialog::Accepted) {
         int w = dlg.intValue();
+        
+        // Prevent BezierSurfaceItem from width changes
+        QList<int> originalWidths;
+        for (QGraphicsItem *item : ui->graphicsView->scene()->items()) {
+            if (auto *bs = qgraphicsitem_cast<BezierSurfaceItem*>(item)) {
+                originalWidths.append(bs->penWidth);
+            }
+        }
+        
         ui->graphicsView->penWidth = w;
+        
+        // Restore original widths for BezierSurfaceItem
+        int bsIndex = 0;
+        for (QGraphicsItem *item : ui->graphicsView->scene()->items()) {
+            if (auto *bs = qgraphicsitem_cast<BezierSurfaceItem*>(item)) {
+                bs->penWidth = originalWidths[bsIndex++];
+            }
+        }
+        
         ui->rasterWidget->setPenWidth(w);
         ui->spinBox->setValue(w);
     }
@@ -565,7 +644,7 @@ void MainWindow::on_fillSelectButton_clicked()
     if(ui->fillSelectButton->isChecked()){
         ui->graphicsView->setPainterStatus(PainterStatus::FILLSELECT);
         ui->rasterWidget->setPainterStatus(PainterStatus::FILLSELECT);
-        ui->fillSelectButton->setChecked(true);
+        ui->fillSelectAction->setChecked(true);
     }
 }
 
@@ -623,3 +702,4 @@ void MainWindow::onEllipseAlgorithmTriggered(QAction* action)
         a->setChecked(a == action);
     }
 }
+

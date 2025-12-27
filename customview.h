@@ -14,6 +14,7 @@
 #include "transformablerectitem.h"
 #include "transformablepolygonitem.h"
 #include "transformableellipseitem.h"
+#include "parametriccurves.h"
 
 class CustomView : public QGraphicsView
 {
@@ -59,6 +60,11 @@ private:
     const int maxUndoSteps = 50; // 最大撤销步数
     QStack<QJsonArray> undoStack; // 重做栈
     QStack<QJsonArray> redoStack; // 撤销栈
+
+    //曲线相关
+    BezierCurveItem *m_currentCurveItem = nullptr;
+    BSplineCurveItem *m_currentBSplineItem = nullptr;
+    BezierSurfaceItem *m_currentSurfaceItem = nullptr;
 
 public:
     int penWidth = 1; // 线宽

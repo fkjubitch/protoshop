@@ -18,5 +18,6 @@
         <file>images/arat.jpg</file>
         <file>images/fillButton.png</file>
         <file>images/rat.ico</file>
+        <file>images/curveSurface.png</file>
     </qresource>
 </RCC>
